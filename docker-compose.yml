@@ -1,0 +1,77 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance}
+      POSTGRES_DB: ${POSTGRES_DB:-financeway}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finance}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [app]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [app]
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-finance}:${POSTGRES_PASSWORD:-finance}@db:5432/${POSTGRES_DB:-financeway}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-env}
+      JWT_ALG: HS256
+      ACCESS_TTL: 900
+      REFRESH_TTL: 2592000
+    volumes:
+      - ofxdata:/data/ofx
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\""]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    networks: [app]
+
+  web:
+    build: ./frontend
+    expose: ["80"]
+    networks: [app]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      api: {condition: service_started}
+      web: {condition: service_started}
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [app]
+
+volumes:
+  pgdata:
+  redisdata:
+  ofxdata:
+
+networks:
+  app:

@@ -4,9 +4,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../../lib/auth-store";
 import { ApiError, api } from "../../lib/api-client";
 
-const box: React.CSSProperties = { maxWidth: 400, margin: "64px auto", fontFamily: "system-ui", padding: 16 };
-const input: React.CSSProperties = { width: "100%", padding: 10, margin: "8px 0", boxSizing: "border-box" };
-const btn: React.CSSProperties = { width: "100%", padding: 12, marginTop: 8, cursor: "pointer" };
 
 function message(e: unknown): string {
   if (e instanceof ApiError) {
@@ -41,15 +38,18 @@ export function LoginPage() {
   }
 
   return (
-    <main style={box}>
+    <main className="fw-auth-wrap">
+    <div className="fw-auth-card">
       <h1>Entrar</h1>
+      <p className="sub">FinanceWay · gestão financeira</p>
       <form onSubmit={onSubmit}>
-        <input style={input} placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-        <input style={input} type="password" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
-        <button style={btn} disabled={busy}>{busy ? "Entrando..." : "Entrar"}</button>
+        <input className="fw-input" style={{ margin: "8px 0" }} placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        <input className="fw-input" style={{ margin: "8px 0" }} type="password" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        {error && <p className="fw-error">{error}</p>}
+        <button className="fw-btn" style={{ width: "100%", marginTop: 8 }} disabled={busy}>{busy ? "Entrando..." : "Entrar"}</button>
       </form>
       <p><Link to="/register">Criar conta</Link> · <Link to="/recover">Esqueci a senha</Link></p>
+    </div>
     </main>
   );
 }
@@ -82,16 +82,19 @@ export function RegisterPage() {
   }
 
   return (
-    <main style={box}>
+    <main className="fw-auth-wrap">
+    <div className="fw-auth-card">
       <h1>Criar conta</h1>
+      <p className="sub">Comece a organizar suas finanças</p>
       <form onSubmit={onSubmit}>
-        <input style={input} placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-        <input style={input} placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-        <input style={input} type="password" placeholder="Senha (mín. 8)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
-        <button style={btn} disabled={busy}>{busy ? "Criando..." : "Criar conta"}</button>
+        <input className="fw-input" style={{ margin: "8px 0" }} placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+        <input className="fw-input" style={{ margin: "8px 0" }} placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        <input className="fw-input" style={{ margin: "8px 0" }} type="password" placeholder="Senha (mín. 8)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        {error && <p className="fw-error">{error}</p>}
+        <button className="fw-btn" style={{ width: "100%", marginTop: 8 }} disabled={busy}>{busy ? "Criando..." : "Criar conta"}</button>
       </form>
       <p><Link to="/login">Já tenho conta</Link></p>
+    </div>
     </main>
   );
 }
@@ -116,14 +119,17 @@ export function RecoverPage() {
   }
 
   return (
-    <main style={box}>
+    <main className="fw-auth-wrap">
+    <div className="fw-auth-card">
       <h1>Recuperar senha</h1>
+      <p className="sub">Enviaremos instruções por e-mail</p>
       <form onSubmit={onSubmit}>
-        <input style={input} placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        <input className="fw-input" style={{ margin: "8px 0" }} placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
         {done && <p>{done}</p>}
-        <button style={btn} disabled={busy}>{busy ? "Enviando..." : "Enviar instruções"}</button>
+        <button className="fw-btn" style={{ width: "100%", marginTop: 8 }} disabled={busy}>{busy ? "Enviando..." : "Enviar instruções"}</button>
       </form>
       <p><Link to="/login">Voltar ao login</Link></p>
+    </div>
     </main>
   );
 }
@@ -150,15 +156,18 @@ export function ResetPage() {
   }
 
   return (
-    <main style={box}>
+    <main className="fw-auth-wrap">
+    <div className="fw-auth-card">
       <h1>Redefinir senha</h1>
+      <p className="sub">Use o token recebido</p>
       <form onSubmit={onSubmit}>
-        <input style={input} placeholder="Token recebido" value={token} onChange={(e) => setToken(e.target.value)} />
-        <input style={input} type="password" placeholder="Nova senha (mín. 8)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        <input className="fw-input" style={{ margin: "8px 0" }} placeholder="Token recebido" value={token} onChange={(e) => setToken(e.target.value)} />
+        <input className="fw-input" style={{ margin: "8px 0" }} type="password" placeholder="Nova senha (mín. 8)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         {done && <p>{done}</p>}
-        <button style={btn} disabled={busy}>{busy ? "Salvando..." : "Redefinir"}</button>
+        <button className="fw-btn" style={{ width: "100%", marginTop: 8 }} disabled={busy}>{busy ? "Salvando..." : "Redefinir"}</button>
       </form>
       <p><Link to="/login">Voltar ao login</Link></p>
+    </div>
     </main>
   );
 }

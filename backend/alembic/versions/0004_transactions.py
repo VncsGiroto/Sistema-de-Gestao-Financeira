@@ -1,7 +1,8 @@
 """0004 transactions (import_id entra no Épico 3, nullable)."""
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0004_transactions"
 down_revision = "0003_accounts_categories"

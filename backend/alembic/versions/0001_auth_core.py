@@ -1,8 +1,9 @@
 """0001 users + refresh_tokens + audit_logs."""
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import CITEXT
+
+from alembic import op
 
 revision = "0001_auth_core"
 down_revision = None

@@ -94,7 +94,10 @@ async def reset_password(session: AsyncSession, token: str, new_password: str) -
 
 
 async def change_password(
-    session: AsyncSession, user_id: int, current_password: str, new_password: str,
+    session: AsyncSession,
+    user_id: int,
+    current_password: str,
+    new_password: str,
     keep_refresh_hash: str | None = None,
 ) -> None:
     user = await users_repo.get_by_id(session, user_id)

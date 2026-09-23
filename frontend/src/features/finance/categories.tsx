@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useCategories, useCategoryMutations } from "./hooks";
 import { ApiError } from "../../lib/api-client";
+import { Button, PageHeader } from "../../components/ui";
+import { labelOf, txTypeLabel } from "../../lib/labels";
 
 export function CategoriesPage() {
   const [filter, setFilter] = useState("");
@@ -25,42 +27,42 @@ export function CategoriesPage() {
   }
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: 32, maxWidth: 720 }}>
-      <h1>Categorias</h1>
-      {msg && <p style={{ color: "crimson" }}>{msg}</p>}
-      <form onSubmit={onCreate} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
-        <select value={type} onChange={(e) => setType(e.target.value)}>
+    <>
+      <PageHeader title="Categorias" sub="Organize receitas e despesas." />
+      {msg && <p className="fw-error">{msg}</p>}
+      <form onSubmit={onCreate} className="fw-row">
+        <input className="fw-input" style={{ width: "auto" }} placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
+        <select className="fw-select" style={{ width: "auto" }} value={type} onChange={(e) => setType(e.target.value)}>
           <option value="EXPENSE">Despesa</option>
           <option value="INCOME">Receita</option>
         </select>
-        <button>Criar</button>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+        <Button type="submit">Criar</Button>
+        <select className="fw-select" style={{ width: "auto" }} value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="">Todas</option>
           <option value="EXPENSE">Despesas</option>
           <option value="INCOME">Receitas</option>
         </select>
       </form>
       {isLoading && <p>Carregando...</p>}
-      <ul>
+      <ul className="fw-list">
         {(data ?? []).map((c) => (
-          <li key={c.id}>
+          <li className="fw-list-item" key={c.id}>
             {editing === c.id ? (
               <>
-                <input value={editName} onChange={(e) => setEditName(e.target.value)} />
-                <button onClick={async () => { await m.patch.mutateAsync({ id: c.id, name: editName.trim() }); setEditing(null); }}>Salvar</button>
-                <button onClick={() => setEditing(null)}>Cancelar</button>
+                <input className="fw-input" style={{ width: "auto" }} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                <Button size="sm" onClick={async () => { await m.patch.mutateAsync({ id: c.id, name: editName.trim() }); setEditing(null); }}>Salvar</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button>
               </>
             ) : (
               <>
-                {c.name} ({c.type})
-                <button onClick={() => { setEditing(c.id); setEditName(c.name); }}>Renomear</button>
-                <button onClick={() => m.remove.mutateAsync(c.id)}>Excluir</button>
+                <span><strong>{c.name}</strong> ({labelOf(txTypeLabel, c.type)})</span>
+                <Button size="sm" variant="ghost" onClick={() => { setEditing(c.id); setEditName(c.name); }}>Renomear</Button>
+                <Button size="sm" variant="danger" onClick={() => m.remove.mutateAsync(c.id)}>Excluir</Button>
               </>
             )}
           </li>
         ))}
       </ul>
-    </main>
+    </>
   );
 }

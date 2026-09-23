@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "./styles/tokens.css";
+import "./styles/base.css";
 import { AuthProvider } from "./lib/auth-store";
 import { AppRouter } from "./routes/router";
 

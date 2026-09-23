@@ -1,7 +1,8 @@
 """0002 password_resets para recover/reset."""
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0002_password_resets"
 down_revision = "0001_auth_core"

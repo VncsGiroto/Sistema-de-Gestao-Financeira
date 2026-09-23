@@ -17,10 +17,9 @@ async def app_client(monkeypatch):
         pytest.skip("TEST_DATABASE_URL ausente")
     monkeypatch.setenv("DATABASE_URL", DB_URL)
     monkeypatch.setenv("REDIS_URL", REDIS_URL or "redis://localhost:6379/0")
-    from app.main import app
-
     import app.core.db as dbmod
     from app.core.db import Base
+    from app.main import app
 
     engine = create_async_engine(DB_URL, pool_pre_ping=True)
     async with engine.begin() as conn:

@@ -5,24 +5,18 @@ from app.modules.imports.models import Import, ImportItem
 
 
 async def get_import(session: AsyncSession, user_id: int, import_id: int) -> Import | None:
-    res = await session.execute(
-        select(Import).where(Import.id == import_id, Import.user_id == user_id)
-    )
+    res = await session.execute(select(Import).where(Import.id == import_id, Import.user_id == user_id))
     return res.scalar_one_or_none()
 
 
 async def list_imports(session: AsyncSession, user_id: int, limit: int = 50) -> list[Import]:
-    res = await session.execute(
-        select(Import).where(Import.user_id == user_id).order_by(Import.id.desc()).limit(limit)
-    )
+    res = await session.execute(select(Import).where(Import.user_id == user_id).order_by(Import.id.desc()).limit(limit))
     return list(res.scalars().all())
 
 
 async def count_items(session: AsyncSession, import_id: int) -> dict:
     res = await session.execute(
-        select(ImportItem.verdict, func.count())
-        .where(ImportItem.import_id == import_id)
-        .group_by(ImportItem.verdict)
+        select(ImportItem.verdict, func.count()).where(ImportItem.import_id == import_id).group_by(ImportItem.verdict)
     )
     return {verdict: n for verdict, n in res.all()}
 

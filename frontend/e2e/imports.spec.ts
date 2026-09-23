@@ -27,7 +27,7 @@ test("import → review → commit", async ({ page }) => {
   await page.locator('input[type="file"]').setInputFiles(OFX);
   await page.getByRole("button", { name: /enviar/i }).click();
   await expect(page.getByText(/revisão da importação/i)).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(/VALIDATED/)).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText(/Validada/)).toBeVisible({ timeout: 20000 });
 
   // itens NEW aparecem; commit direto (sem pendências) importa
   await expect(page.getByText(/SUPERMERCADO XYZ/)).toBeVisible({ timeout: 15000 });

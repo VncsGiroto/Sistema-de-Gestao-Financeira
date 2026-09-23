@@ -42,6 +42,26 @@ export interface TxPage {
   meta: { page: number; per_page: number; total: number };
 }
 
+export interface CommitmentItem {
+  kind: string;
+  description: string;
+  due_date: string;
+  amount: string;
+  ref_id: number;
+}
+
+export interface CommitmentsData {
+  total: string;
+  items: CommitmentItem[];
+}
+
+export interface DashboardData {
+  balance: string;
+  income: { total: string; by_category: { name: string; total: string }[] };
+  expense: { total: string; by_category: { name: string; total: string }[] };
+  evolution: { month: string; income: string; expense: string }[];
+}
+
 export interface ImportJob {
   id: number;
   account_id: number;
@@ -61,6 +81,41 @@ export interface ImportItem {
   verdict: string;
   payload: Record<string, unknown>;
   matched_transaction_id: number | null;
+}
+
+export interface Bill {
+  id: number;
+  description: string;
+  amount: string;
+  kind: string;
+  periodicity: string | null;
+  due_day: number | null;
+  next_due: string | null;
+}
+
+export interface BillBody {
+  description: string;
+  amount: string;
+  kind: string;
+  periodicity?: string;
+  due_day?: number;
+  next_due?: string;
+}
+
+export interface Installment {
+  id: number;
+  description: string;
+  total_amount: string;
+  num_installments: number;
+  installment_amount: string;
+  first_due_date: string;
+  account_id: number | null;
+}
+
+export interface ScheduleItem {
+  n: number;
+  due_date: string;
+  amount: string;
 }
 
 export interface TxFilters {
@@ -107,6 +162,7 @@ async function parseError(res: Response): Promise<string> {
 
 async function request<T>(path: string, init?: RequestInit, access?: string | null): Promise<T> {
   const res = await fetch(`${base}${path}`, {
+    credentials: "include", // refresh via cookie HttpOnly
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -125,13 +181,17 @@ export const api = {
     request<User>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
     request<TokenPair>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
-  refresh: (refresh_token: string) =>
+  refresh: (refresh_token?: string) =>
     request<TokenPair>("/auth/refresh", {
       method: "POST",
-      body: JSON.stringify({ refresh_token }),
+      body: JSON.stringify(refresh_token ? { refresh_token } : {}),
     }),
-  logout: (refresh_token: string, access: string) =>
-    request<void>("/auth/logout", { method: "POST", body: JSON.stringify({ refresh_token }) }, access),
+  logout: (access: string | null, refresh_token?: string) =>
+    request<void>(
+      "/auth/logout",
+      { method: "POST", body: JSON.stringify(refresh_token ? { refresh_token } : {}) },
+      access,
+    ),
   me: (access: string) => request<User>("/auth/me", {}, access),
   recover: (email: string) =>
     request<{ message: string }>("/auth/recover", { method: "POST", body: JSON.stringify({ email }) }),
@@ -204,6 +264,31 @@ export const api = {
     commit: (id: number, access: string) =>
       request<{ imported_rows: number; duplicate_rows: number; skipped: number }>(`/imports/${id}/commit`, { method: "POST" }, access),
     matched: (txId: number, access: string) => request<Tx>(`/transactions/${txId}`, {}, access),
+  },
+  dashboard: {
+    get: (f: { from?: string; to?: string; account_id?: number }, access: string) =>
+      request<DashboardData>(`/dashboard${qs(f as Record<string, string | number | undefined>)}`, {}, access),
+  },
+  bills: {
+    list: (access: string) => request<Bill[]>("/bills", {}, access),
+    upcoming: (days: number, access: string) => request<Bill[]>(`/bills/upcoming?days=${days}`, {}, access),
+    create: (body: BillBody, access: string) =>
+      request<Bill>("/bills", { method: "POST", body: JSON.stringify(body) }, access),
+    patch: (id: number, body: Partial<BillBody>, access: string) =>
+      request<Bill>(`/bills/${id}`, { method: "PATCH", body: JSON.stringify(body) }, access),
+    remove: (id: number, access: string) =>
+      request<void>(`/bills/${id}`, { method: "DELETE" }, access),
+  },
+  installments: {
+    list: (access: string) => request<Installment[]>("/installments", {}, access),
+    create: (
+      body: { description: string; total_amount: string; num_installments: number; first_due_date: string; account_id?: number },
+      access: string,
+    ) => request<Installment>("/installments", { method: "POST", body: JSON.stringify(body) }, access),
+    schedule: (id: number, access: string) =>
+      request<ScheduleItem[]>(`/installments/${id}/schedule`, {}, access),
+    remove: (id: number, access: string) =>
+      request<void>(`/installments/${id}`, { method: "DELETE" }, access),
   },
 
   /** fetch autenticado com retry de refresh uma única vez (chamado pelo store) */

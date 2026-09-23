@@ -24,10 +24,9 @@ async def client(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", DB_URL)
     monkeypatch.setenv("REDIS_URL", REDIS_URL or "redis://localhost:6379/0")
     # importa app (e todos os models) ANTES do drop_all para o metadata estar completo
-    from app.main import app
-
     import app.core.db as dbmod
     from app.core.db import Base
+    from app.main import app
 
     engine = create_async_engine(DB_URL, pool_pre_ping=True)
     async with engine.begin() as conn:
@@ -82,6 +81,30 @@ async def test_register_login_me_refresh_logout(client):
     # login errado → 401
     r = await client.post("/api/auth/login", json={"email": email, "password": "errada-x"})
     assert r.status_code == 401
+
+
+async def test_cookie_flow(client):
+    """Refresh via cookie HttpOnly (sem corpo): login → refresh → logout → refresh negado."""
+    email = f"c_{uuid.uuid4().hex[:8]}@exemplo.com"
+    await client.post("/api/auth/register", json={"name": "Cook", "email": email, "password": "segredo-123"})
+    r = await client.post("/api/auth/login", json={"email": email, "password": "segredo-123"})
+    assert r.status_code == 200
+    assert "fw_refresh" in r.cookies
+    assert "httponly" in r.headers.get("set-cookie", "").lower()
+
+    r = await client.post("/api/auth/refresh", json={})
+    assert r.status_code == 200, r.text
+    new_access = r.json()["access_token"]
+
+    r = await client.post("/api/auth/logout", json={}, headers={"Authorization": f"Bearer {new_access}"})
+    assert r.status_code == 204
+
+    # cookie limpo + refresh revogado → 401
+    assert "fw_refresh" not in client.cookies
+    r = await client.post("/api/auth/refresh", json={"refresh_token": "token-invalido-123"})
+    assert r.status_code == 401
+    r = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {new_access}"})
+    assert r.status_code == 401  # access do logout caiu na deny-list (jti)
 
 
 async def test_recover_reset_change(client):

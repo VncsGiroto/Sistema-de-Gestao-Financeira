@@ -22,10 +22,17 @@ not_found = lambda: http_error(status.HTTP_404_NOT_FOUND, "Not Found", "Recurso 
 
 def _out(imp: Import) -> ImportOut:
     return ImportOut(
-        id=imp.id, account_id=imp.account_id, source=imp.source, file_name=imp.file_name,
-        status=imp.status, total_rows=imp.total_rows, imported_rows=imp.imported_rows,
-        duplicate_rows=imp.duplicate_rows, error=imp.error,
-        created_at=imp.created_at, processed_at=imp.processed_at,
+        id=imp.id,
+        account_id=imp.account_id,
+        source=imp.source,
+        file_name=imp.file_name,
+        status=imp.status,
+        total_rows=imp.total_rows,
+        imported_rows=imp.imported_rows,
+        duplicate_rows=imp.duplicate_rows,
+        error=imp.error,
+        created_at=imp.created_at,
+        processed_at=imp.processed_at,
     )
 
 
@@ -54,9 +61,13 @@ async def upload_ofx(
     with open(path, "wb") as fh:
         fh.write(raw)
     imp = Import(
-        user_id=user.id, account_id=account_id, source="OFX",
-        file_name=file.filename or "arquivo.ofx", file_path=path,
-        status="RECEIVED", created_at=datetime.now(UTC),
+        user_id=user.id,
+        account_id=account_id,
+        source="OFX",
+        file_name=file.filename or "arquivo.ofx",
+        file_path=path,
+        status="RECEIVED",
+        created_at=datetime.now(UTC),
     )
     session.add(imp)
     await session.commit()
@@ -82,21 +93,34 @@ async def get_import(import_id: int, session: AsyncSession = Depends(get_session
 
 @router.get("/{import_id}/items", response_model=list[ImportItemOut])
 async def list_items(
-    import_id: int, verdict: str | None = None,
-    session: AsyncSession = Depends(get_session), user=Depends(get_current_user),
+    import_id: int,
+    verdict: str | None = None,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ):
     if verdict and verdict not in ("NEW", "EXACT_DUPLICATE", "FUZZY_CANDIDATE", "INVALID"):
         raise http_error(status.HTTP_400_BAD_REQUEST, "Bad Request", "verdict inválido")
     rows = await repo.list_items(session, user.id, import_id, verdict)
     if rows is None:
         raise not_found()
-    return [ImportItemOut(id=r.id, row_no=r.row_no, verdict=r.verdict, payload=r.payload, matched_transaction_id=r.matched_transaction_id) for r in rows]
+    return [
+        ImportItemOut(
+            id=r.id,
+            row_no=r.row_no,
+            verdict=r.verdict,
+            payload=r.payload,
+            matched_transaction_id=r.matched_transaction_id,
+        )
+        for r in rows
+    ]
 
 
 @router.post("/{import_id}/review")
 async def review_import(
-    import_id: int, body: ReviewIn,
-    session: AsyncSession = Depends(get_session), user=Depends(get_current_user),
+    import_id: int,
+    body: ReviewIn,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ):
     try:
         n = await service.review(session, user.id, import_id, [d.model_dump() for d in body.decisions])
@@ -109,7 +133,9 @@ async def review_import(
 
 @router.post("/{import_id}/commit", response_model=CommitOut)
 async def commit_import(
-    import_id: int, session: AsyncSession = Depends(get_session), user=Depends(get_current_user),
+    import_id: int,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ):
     try:
         out = await service.commit(session, user.id, import_id)

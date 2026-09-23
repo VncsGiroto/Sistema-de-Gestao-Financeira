@@ -4,13 +4,16 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.db import get_session
-from app.core.errors import too_many, unauthorized
+from app.core.errors import too_many, unauthorized, unavailable
 from app.core.redis_client import get_redis
 from app.modules.auth import tokens
 from app.modules.users import repository as users_repo
 
 _bearer = HTTPBearer(auto_error=False)
+
+DENY_PREFIX = "denylist:jti:"
 
 
 async def rate_limit(request: Request, key: str, limit: int, window_s: int = 60) -> None:
@@ -25,8 +28,9 @@ async def rate_limit(request: Request, key: str, limit: int, window_s: int = 60)
     except Exception as e:
         if "Too Many" in str(type(e).__name__) or getattr(e, "status_code", None) == 429:
             raise
-        # Redis fora? fail-open em dev, fail-closed seria ideal em prod.
-        # Mantém fail-open p/ Etapa 1 não travar sem redis.
+        if settings.is_prod:
+            raise unavailable("Limitador indisponível")
+        # dev: fail-open para não travar sem redis
         return
 
 
@@ -37,16 +41,20 @@ async def get_current_user(
     if creds is None or not creds.credentials:
         raise unauthorized("Token ausente")
     try:
-        user_id = tokens.decode_token(creds.credentials, "access")
+        claims = tokens.decode_claims(creds.credentials, "access")
     except ValueError as e:
         raise unauthorized(str(e))
-    # deny-list logout
+    user_id = claims["sub"]
+    # deny-list logout (por jti, com TTL do access)
     redis = get_redis()
     try:
-        if await redis.get(f"denylist:access:{creds.credentials[-16:]}"):
+        if await redis.get(f"{DENY_PREFIX}{claims['jti']}"):
             raise unauthorized("Sessão encerrada")
-    except Exception:
-        pass
+    except Exception as e:
+        if getattr(e, "status_code", None) == 401:
+            raise
+        if settings.is_prod:
+            raise unavailable("Sessão não verificável")
     user = await users_repo.get_by_id(session, user_id)
     if user is None:
         raise unauthorized("Usuário não encontrado")

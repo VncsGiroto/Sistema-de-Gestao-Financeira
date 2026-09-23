@@ -4,20 +4,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from alembic import context
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from app.core.config import settings
-from app.core.db import Base
 
 # importa models para autogenerate/ensure metadata
 import app.modules.auth.audit_models  # noqa: F401
 import app.modules.auth.models  # noqa: F401
 import app.modules.auth.recovery_models  # noqa: F401
+import app.modules.bills.models  # noqa: F401
 import app.modules.finance.models  # noqa: F401
 import app.modules.imports.models  # noqa: F401
+import app.modules.installments.models  # noqa: F401
 import app.modules.users.models  # noqa: F401
+from alembic import context
+from app.core.config import settings
+from app.core.db import Base
 
 target_metadata = Base.metadata
 

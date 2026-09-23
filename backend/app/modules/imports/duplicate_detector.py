@@ -48,8 +48,12 @@ class Candidate:
 
 
 def is_fuzzy(
-    account_id: int, date_: date, description: str, amount: Decimal,
-    other: Candidate, window_days: int = WINDOW_DAYS,
+    account_id: int,
+    date_: date,
+    description: str,
+    amount: Decimal,
+    other: Candidate,
+    window_days: int = WINDOW_DAYS,
 ) -> tuple[bool, float]:
     if other.account_id != account_id:
         return False, 0.0

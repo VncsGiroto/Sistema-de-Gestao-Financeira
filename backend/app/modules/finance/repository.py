@@ -16,9 +16,7 @@ async def list_accounts(session: AsyncSession, user_id: int) -> list[Account]:
 
 
 async def get_account(session: AsyncSession, user_id: int, account_id: int) -> Account | None:
-    res = await session.execute(
-        select(Account).where(Account.id == account_id, Account.user_id == user_id)
-    )
+    res = await session.execute(select(Account).where(Account.id == account_id, Account.user_id == user_id))
     return res.scalar_one_or_none()
 
 
@@ -45,9 +43,7 @@ async def list_categories(session: AsyncSession, user_id: int, type_: str | None
 
 
 async def get_category(session: AsyncSession, user_id: int, category_id: int) -> Category | None:
-    res = await session.execute(
-        select(Category).where(Category.id == category_id, Category.user_id == user_id)
-    )
+    res = await session.execute(select(Category).where(Category.id == category_id, Category.user_id == user_id))
     return res.scalar_one_or_none()
 
 
@@ -114,8 +110,14 @@ class TxFilters:
 
 
 async def create_tx(
-    session: AsyncSession, user_id: int, account_id: int, category_id: int | None,
-    date: date_t, description: str, amount: Decimal, type_: str,
+    session: AsyncSession,
+    user_id: int,
+    account_id: int,
+    category_id: int | None,
+    date: date_t,
+    description: str,
+    amount: Decimal,
+    type_: str,
 ) -> Transaction:
     # account/category precisam pertencer ao usuário (404 genérico, sem vazar)
     acc = await get_account(session, user_id, account_id)
@@ -124,8 +126,14 @@ async def create_tx(
     if category_id is not None and await get_category(session, user_id, category_id) is None:
         raise LookupError("category")
     row = Transaction(
-        user_id=user_id, account_id=account_id, category_id=category_id,
-        date=date, description=description.strip(), amount=amount, type=type_, source="MANUAL",
+        user_id=user_id,
+        account_id=account_id,
+        category_id=category_id,
+        date=date,
+        description=description.strip(),
+        amount=amount,
+        type=type_,
+        source="MANUAL",
     )
     session.add(row)
     await session.commit()
@@ -134,9 +142,7 @@ async def create_tx(
 
 
 async def get_tx(session: AsyncSession, user_id: int, tx_id: int) -> Transaction | None:
-    res = await session.execute(
-        select(Transaction).where(Transaction.id == tx_id, Transaction.user_id == user_id)
-    )
+    res = await session.execute(select(Transaction).where(Transaction.id == tx_id, Transaction.user_id == user_id))
     return res.scalar_one_or_none()
 
 
@@ -144,8 +150,7 @@ async def list_txs(session: AsyncSession, user_id: int, f: TxFilters, page: int,
     base = f.apply(select(Transaction).where(Transaction.user_id == user_id))
     total = (await session.execute(select(func.count()).select_from(base.subquery()))).scalar() or 0
     res = await session.execute(
-        base.order_by(Transaction.date.desc(), Transaction.id.desc())
-        .offset((page - 1) * per_page).limit(per_page)
+        base.order_by(Transaction.date.desc(), Transaction.id.desc()).offset((page - 1) * per_page).limit(per_page)
     )
     return list(res.scalars().all()), total
 
@@ -153,7 +158,8 @@ async def list_txs(session: AsyncSession, user_id: int, f: TxFilters, page: int,
 async def export_txs(session: AsyncSession, user_id: int, f: TxFilters, limit: int = 10000):
     res = await session.execute(
         f.apply(select(Transaction).where(Transaction.user_id == user_id))
-        .order_by(Transaction.date.desc(), Transaction.id.desc()).limit(limit)
+        .order_by(Transaction.date.desc(), Transaction.id.desc())
+        .limit(limit)
     )
     return list(res.scalars().all())
 

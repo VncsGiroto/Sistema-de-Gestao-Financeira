@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../../lib/auth-store";
 import { ApiError, api } from "../../lib/api-client";
+import { Button, PageHeader } from "../../components/ui";
 
 export function SecurityPage() {
   const { access, logout } = useAuth();
@@ -30,11 +31,12 @@ export function SecurityPage() {
   }
 
   return (
-    <main style={{ maxWidth: 400, margin: "64px auto", fontFamily: "system-ui", padding: 16 }}>
-      <h1>Trocar senha</h1>
-      <form onSubmit={onSubmit}>
+    <>
+      <PageHeader title="Trocar senha" sub="Sua sessão será encerrada após a troca." />
+      <form onSubmit={onSubmit} className="fw-card" style={{ maxWidth: 400 }}>
         <input
-          style={{ width: "100%", padding: 10, margin: "8px 0" }}
+          className="fw-input"
+          style={{ margin: "8px 0" }}
           type="password"
           placeholder="Senha atual"
           value={current}
@@ -42,7 +44,8 @@ export function SecurityPage() {
           autoComplete="current-password"
         />
         <input
-          style={{ width: "100%", padding: 10, margin: "8px 0" }}
+          className="fw-input"
+          style={{ margin: "8px 0" }}
           type="password"
           placeholder="Nova senha (mín. 8)"
           value={next}
@@ -50,10 +53,10 @@ export function SecurityPage() {
           autoComplete="new-password"
         />
         {msg && <p>{msg}</p>}
-        <button style={{ width: "100%", padding: 12 }} disabled={busy}>
+        <Button style={{ width: "100%" }} disabled={busy}>
           {busy ? "Salvando..." : "Trocar senha"}
-        </button>
+        </Button>
       </form>
-    </main>
+    </>
   );
 }

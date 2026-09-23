@@ -17,10 +17,9 @@ async def tac(monkeypatch):
         pytest.skip("TEST_DATABASE_URL ausente")
     monkeypatch.setenv("DATABASE_URL", DB_URL)
     monkeypatch.setenv("REDIS_URL", REDIS_URL or "redis://localhost:6379/0")
-    from app.main import app
-
     import app.core.db as dbmod
     from app.core.db import Base
+    from app.main import app
 
     engine = create_async_engine(DB_URL, pool_pre_ping=True)
     async with engine.begin() as conn:
@@ -66,8 +65,14 @@ async def test_tx_crud_e_validacoes(tac):
 
     r = await ac.post(
         "/api/transactions",
-        json={"account_id": acc, "category_id": cat, "date": "2026-09-10",
-              "description": "SUPERMERCADO", "amount": "-250.50", "type": "EXPENSE"},
+        json={
+            "account_id": acc,
+            "category_id": cat,
+            "date": "2026-09-10",
+            "description": "SUPERMERCADO",
+            "amount": "-250.50",
+            "type": "EXPENSE",
+        },
         headers=h,
     )
     assert r.status_code == 201, r.text
@@ -153,8 +158,14 @@ async def test_tx_isolamento_e_regras_delete(tac):
 
     r = await ac.post(
         "/api/transactions",
-        json={"account_id": acc, "category_id": cat, "date": "2026-09-10",
-              "description": "X", "amount": "-10", "type": "EXPENSE"},
+        json={
+            "account_id": acc,
+            "category_id": cat,
+            "date": "2026-09-10",
+            "description": "X",
+            "amount": "-10",
+            "type": "EXPENSE",
+        },
         headers=ha,
     )
     tx = r.json()["id"]

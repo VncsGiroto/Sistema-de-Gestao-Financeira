@@ -31,9 +31,7 @@ async def get_any(session: AsyncSession, token_hash: str) -> RefreshToken | None
 
 
 async def revoke(session: AsyncSession, token_id: int) -> None:
-    await session.execute(
-        update(RefreshToken).where(RefreshToken.id == token_id).values(revoked_at=datetime.now(UTC))
-    )
+    await session.execute(update(RefreshToken).where(RefreshToken.id == token_id).values(revoked_at=datetime.now(UTC)))
     await session.commit()
 
 

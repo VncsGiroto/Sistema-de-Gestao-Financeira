@@ -14,6 +14,17 @@ class Settings(BaseSettings):
     ofx_dir: str = "/data/ofx"
     ofx_max_bytes: int = 10 * 1024 * 1024
     dedup_window_days: int = 2
+    # hardening (6.1)
+    env: str = "dev"  # dev | prod (prod = fail-closed no Redis + cookie Secure)
+    cors_origins: str = "http://localhost:8080,http://localhost:5173"
+    cookie_secure: bool = False  # True atrás de HTTPS em prod
+
+    @property
+    def is_prod(self) -> bool:
+        return self.env == "prod"
+
+    def cors_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
 settings = Settings()

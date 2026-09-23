@@ -49,7 +49,7 @@ CREATE TABLE transactions (
   source VARCHAR(20) NOT NULL DEFAULT 'MANUAL'
     CHECK (source IN ('MANUAL','OFX','IMPORT')),
   external_id VARCHAR(255),
-  import_id BIGINT REFERENCES imports(id) ON DELETE SET NULL,
+  import_id BIGINT REFERENCES imports(id) ON DELETE SET NULL,   -- Épico 3 (migration 0005)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, source, external_id),
@@ -107,7 +107,9 @@ CREATE TABLE installments (
   num_installments INT NOT NULL CHECK (num_installments BETWEEN 2 AND 60),
   installment_amount NUMERIC(14,2) NOT NULL,
   first_due_date DATE NOT NULL,
-  account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL
+  account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),   -- migration 0008 (model já tinha)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE refresh_tokens (
@@ -138,4 +140,8 @@ CREATE TABLE audit_logs (
 
 ## 4. Migrations
 
-Alembic, uma revision por tabela/índice. Seed dev: 1 usuário + 2 contas + 12 categorias padrão (§9 doc inicial).
+Cadeia validada em banco fresco: `0001_auth_core → 0002_password_resets → 0003_accounts_categories → 0004_transactions → 0005_imports → 0006_recurring_bills → 0007_installments → 0008_installments_timestamps` (drift model×banco = zero).
+
+Tabelas auxiliares: `password_resets` (recovery 1h, uso único) e `audit_logs(action,entity,entity_id,meta)`.
+
+Sem seed automático (testes usam `drop_all/create_all`; dev cria via UI).

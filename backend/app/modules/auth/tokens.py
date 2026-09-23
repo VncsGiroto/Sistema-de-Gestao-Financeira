@@ -30,6 +30,11 @@ def create_refresh_token(user_id: int) -> tuple[str, str, datetime]:
 
 
 def decode_token(token: str, expected_type: str) -> int:
+    return decode_claims(token, expected_type)["sub"]
+
+
+def decode_claims(token: str, expected_type: str) -> dict:
+    """Valida e devolve {sub: int, jti: str} (jti alimenta a deny-list)."""
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_alg])
     except jwt.ExpiredSignatureError:
@@ -38,7 +43,9 @@ def decode_token(token: str, expected_type: str) -> int:
         raise ValueError("Token inválido")
     if payload.get("type") != expected_type:
         raise ValueError("Tipo de token inválido")
-    return int(payload["sub"])
+    if not payload.get("jti"):
+        raise ValueError("Token sem identificador")
+    return {"sub": int(payload["sub"]), "jti": str(payload["jti"])}
 
 
 RECOVERY_TTL_SECONDS = 3600

@@ -1,0 +1,31 @@
+# Override de staging: endurece o compose base sem duplicá-lo.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+services:
+  api:
+    restart: always
+    environment:
+      ENV: prod
+      COOKIE_SECURE: "true"
+      CORS_ORIGINS: ${CORS_ORIGINS:?defina o domínio de staging}
+      JWT_SECRET: ${JWT_SECRET:?defina um segredo de 32+ chars}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  web:
+    restart: always
+
+  db:
+    restart: always
+
+  redis:
+    restart: always
+    # sem porta publicada: só a api alcança via rede interna. Para exigir senha,
+    # defina REDIS_URL com :senha@ e adicione --requirepass correspondente aqui.
+
+  nginx:
+    restart: always
+    ports:
+      - "${NGINX_PORT:-8080}:80"

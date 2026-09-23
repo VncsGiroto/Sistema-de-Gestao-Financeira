@@ -20,17 +20,16 @@ Compose: `web + api + db + redis + nginx`. Ver `docker-compose.yml`.
 
 ```
 backend/app/
-  main.py              — composição (D: wiring via Depends)
-  core/{config,security,db,redis,errors}.py
+  main.py              — composição (D: wiring via Depends; CORS via env)
+  core/{config,db,redis_client,errors,models}.py
   modules/
-    auth/{router,service,tokens}.py
-    users/{router,service,schemas}.py
-    accounts/{router,service,repository}.py
-    categories/{router,service,repository}.py
-    transactions/{router,service,repository,schemas}.py
-    imports/{router,service,ofx_parser,normalizer,duplicate_detector,repository}.py
-    bills/{router,service}.py        — recurring_bills + installments
-    dashboard/{router,service}.py
+    auth/{router,service,tokens,deps,repository,audit_models,recovery_models}.py
+    users/{models,passwords,repository}.py
+    finance/{router,repository,schemas,models}.py   — accounts, categories, transactions
+    imports/{router,service,ofx_parser,normalizer,duplicate_detector,repository,schemas,models}.py
+    bills/{router,repository,schemas,models,due_dates}.py        — recurring_bills
+    installments/{router,repository,schemas,schedule,models}.py — cronograma mensal
+    dashboard/{router,service,schemas,commitments}.py           — agregações + agenda
 ```
 
 Regra: `router → service → repository`. Router não acessa DB direto. Service não importa FastAPI (testável puro). Repository só SQLAlchemy.
@@ -58,12 +57,13 @@ MVP implementa `OfxImporter`. Pluggy/Belvo futuros só adicionam classes, sem al
 
 ## 4. Frontend
 
-`frontend/src/{routes,features/{auth,dashboard,transactions,accounts,imports,bills},lib/api,components/ui}`.
-Estado servidor via TanStack Query; estado auth via contexto + access em memória. Ver `FRONTEND.md`.
+`frontend/src/{routes,features/{auth,dashboard,finance,imports,bills,installments},lib,components}`.
+Estado servidor via TanStack Query; auth via contexto + access em memória + refresh em cookie HttpOnly. Ver `FRONTEND.md`.
 
 ## 5. Decisões
 
 - REST (não GraphQL/tRPC): contrato estável p/ app nativo futuro.
 - Async SQLAlchemy: imports e dashboard concorrentes sem bloquear loop.
-- Redis obrigatório: rate-limit auth + deny-list logout + fila de imports (evita timeout HTTP em OFX grande).
-- Nginx na frente: um ponto p/ TLS, gzip, cache estático e headers.
+- Redis: rate-limit + deny-list por jti (fail-closed em `ENV=prod`). OFX processa em BackgroundTasks inline (worker separado só se o volume justificar).
+- Nginx na frente: TLS, gzip, headers (HSTS/CSP), `limit_req` em login/recover.
+- Tolerância a bancos: `normalize_headers()` antes do ofxparse (ex.: C6 com `UTF - 8`) + fallback com headers padrão.

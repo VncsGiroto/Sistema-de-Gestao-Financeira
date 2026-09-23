@@ -36,7 +36,10 @@ async def _classify(session, imp: Import, norm: NormalizedTx) -> tuple[str, dict
     best: tuple[float, Transaction] | None = None
     for tx in res.scalars().all():
         ok, score = is_fuzzy(
-            norm.account_id, norm.date, norm.description, Decimal(norm.amount),
+            norm.account_id,
+            norm.date,
+            norm.description,
+            Decimal(norm.amount),
             Candidate(id=tx.id, account_id=tx.account_id, date=tx.date, description=tx.description, amount=tx.amount),
             window_days=window,
         )
@@ -73,7 +76,11 @@ async def process_import(import_id: int) -> None:
                     payload = norm.model_dump(mode="json") | {"raw": {"memo": r.memo, "name": r.name}} | extra
                     if verdict == "EXACT_DUPLICATE":
                         exact += 1
-                session.add(ImportItem(import_id=imp.id, row_no=i + 1, payload=payload, verdict=verdict, matched_transaction_id=matched))
+                session.add(
+                    ImportItem(
+                        import_id=imp.id, row_no=i + 1, payload=payload, verdict=verdict, matched_transaction_id=matched
+                    )
+                )
             imp.duplicate_rows = exact
             imp.status = "VALIDATED"
             imp.processed_at = datetime.now(UTC)
@@ -95,8 +102,9 @@ class CommitBlocked(ValueError):
 
 
 async def review(session, user_id: int, import_id: int, decisions: list[dict]) -> int:
-    from app.modules.imports.models import ImportItem
     from sqlalchemy import select
+
+    from app.modules.imports.models import ImportItem
 
     imp = await session.get(Import, import_id)
     if imp is None or imp.user_id != user_id:
@@ -166,12 +174,16 @@ async def commit(session, user_id: int, import_id: int) -> dict:
             continue
         seen_external.add(ext)
         tx = Transaction(
-            user_id=user_id, account_id=imp.account_id,
+            user_id=user_id,
+            account_id=imp.account_id,
             category_id=None,
             date=date_t.fromisoformat(it.payload["date"]),
             description=it.payload["description"][:500],
             amount=Decimal(it.payload["amount"]),
-            type=it.payload["type"], source="OFX", external_id=ext, import_id=imp.id,
+            type=it.payload["type"],
+            source="OFX",
+            external_id=ext,
+            import_id=imp.id,
         )
         session.add(tx)
         await session.flush()

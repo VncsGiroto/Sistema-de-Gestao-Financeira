@@ -4,6 +4,8 @@ import { api } from "../../lib/api-client";
 import type { ImportItem, Tx } from "../../lib/api-client";
 import { ApiError } from "../../lib/api-client";
 import { useImport, useImportItems, useImportMutations } from "./hooks";
+import { Badge, Button, PageHeader, verdictTone } from "../../components/ui";
+import { importStatusLabel, labelOf, txTypeLabel, verdictLabel } from "../../lib/labels";
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : v == null ? "—" : String(v);
@@ -27,26 +29,26 @@ function ItemRow({ item, onDecide }: { item: ImportItem; onDecide: (id: number, 
 
   const needsReview = item.verdict === "EXACT_DUPLICATE" || item.verdict === "FUZZY_CANDIDATE";
   return (
-    <div style={{ border: "1px solid #ccc", margin: "8px 0", padding: 8 }}>
+    <div className="fw-card" style={{ marginBottom: 8 }}>
       <p>
-        <strong>#{item.row_no}</strong> {str(p.date)} — {str(p.description)} — R$ {str(p.amount)} ({str(p.type)})
-        {" "}→ <em>{item.verdict}</em>
+        <strong>#{item.row_no}</strong> {str(p.date)} — {str(p.description)} — R$ {str(p.amount)} ({labelOf(txTypeLabel, str(p.type))})
+        {" "}<Badge tone={verdictTone(item.verdict)}>{labelOf(verdictLabel, item.verdict)}</Badge>
         {typeof p.score === "number" && <span> (score {p.score})</span>}
       </p>
       {item.matched_transaction_id && (
         <>
-          <button onClick={toggle}>{open ? "Ocultar original" : "Ver original no banco"}</button>
+          <Button size="sm" variant="ghost" onClick={toggle}>{open ? "Ocultar original" : "Ver original no banco"}</Button>
           {open && (
             matched ? (
-              <p>Banco: {matched.date} — {matched.description} — R$ {matched.amount} ({matched.type})</p>
+              <p>Banco: {matched.date} — {matched.description} — R$ {matched.amount} ({labelOf(txTypeLabel, matched.type)})</p>
             ) : <p>Carregando original...</p>
           )}
         </>
       )}
       {needsReview && (
         <p>
-          <button onClick={() => onDecide(item.id, "KEEP_BOTH")}>Manter ambos</button>{" "}
-          <button onClick={() => onDecide(item.id, "DISCARD_IMPORTED")}>Descartar importado</button>
+          <Button size="sm" onClick={() => onDecide(item.id, "KEEP_BOTH")}>Manter ambos</Button>{" "}
+          <Button size="sm" variant="danger" onClick={() => onDecide(item.id, "DISCARD_IMPORTED")}>Descartar importado</Button>
         </p>
       )}
     </div>
@@ -83,23 +85,23 @@ export function ReviewPage({ id }: { id: number }) {
   }
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: 32 }}>
-      <h1>Revisão da importação #{id}</h1>
-      {imp && <p>Status: {imp.status} — total {imp.total_rows}, importados {imp.imported_rows}, duplicados {imp.duplicate_rows}</p>}
-      {imp?.error && <p style={{ color: "crimson" }}>{imp.error}</p>}
-      {msg && <p style={{ color: "crimson" }}>{msg}</p>}
+    <>
+      <PageHeader title={`Revisão da importação #${id}`} sub="Confirme duplicatas e importe os lançamentos." backTo="/app/imports" />
+      {imp && <p>Status: <Badge tone={verdictTone(imp.status)}>{labelOf(importStatusLabel, imp.status)}</Badge> — total {imp.total_rows}, importados {imp.imported_rows}, duplicados {imp.duplicate_rows}</p>}
+      {imp?.error && <p className="fw-error">{imp.error}</p>}
+      {msg && <p className="fw-error">{msg}</p>}
       {result && <p>{result}</p>}
-      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-        <select value={verdict} onChange={(e) => setVerdict(e.target.value)}>
+      <div className="fw-row">
+        <select className="fw-select" style={{ width: "auto" }} value={verdict} onChange={(e) => setVerdict(e.target.value)}>
           <option value="">Todos</option>
           <option value="NEW">Novos</option>
           <option value="EXACT_DUPLICATE">Duplicados exatos</option>
           <option value="FUZZY_CANDIDATE">Possíveis duplicatas</option>
           <option value="INVALID">Inválidos</option>
         </select>
-        <button onClick={commit}>Confirmar importação</button>
+        <Button onClick={commit}>Confirmar importação</Button>
       </div>
       {(items ?? []).map((it) => <ItemRow key={it.id} item={it} onDecide={decide} />)}
-    </main>
+    </>
   );
 }

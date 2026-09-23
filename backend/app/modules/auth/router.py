@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.db import get_session
-from app.core.errors import unauthorized
+from app.core.errors import unauthorized, unavailable
 from app.core.redis_client import get_redis
-from app.modules.auth import service
-from app.modules.auth.deps import get_current_user, rate_limit
+from app.modules.auth import service, tokens
+from app.modules.auth.deps import DENY_PREFIX, get_current_user, rate_limit
 from app.modules.auth.schemas import (
     ChangeIn,
     LoginIn,
@@ -20,6 +21,38 @@ from app.modules.auth.schemas import (
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+REFRESH_COOKIE = "fw_refresh"
+
+
+def _set_refresh_cookie(resp: Response, token: str) -> None:
+    resp.set_cookie(
+        REFRESH_COOKIE,
+        token,
+        max_age=settings.refresh_ttl,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/api/auth",
+    )
+
+
+def _clear_refresh_cookie(resp: Response) -> None:
+    resp.delete_cookie(REFRESH_COOKIE, path="/api/auth")
+
+
+async def _deny_access_token(auth_header: str) -> None:
+    if not auth_header.lower().startswith("bearer "):
+        return
+    try:
+        jti = tokens.decode_claims(auth_header.split(" ", 1)[1], "access")["jti"]
+    except ValueError:
+        return
+    try:
+        await get_redis().setex(f"{DENY_PREFIX}{jti}", settings.access_ttl, "1")
+    except Exception:
+        if settings.is_prod:
+            raise unavailable("Sessão não revogável")
+
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterIn, session: AsyncSession = Depends(get_session)):
@@ -28,22 +61,27 @@ async def register(body: RegisterIn, session: AsyncSession = Depends(get_session
 
 
 @router.post("/login", response_model=TokenPair)
-async def login(body: LoginIn, request: Request, session: AsyncSession = Depends(get_session)):
+async def login(body: LoginIn, request: Request, response: Response, session: AsyncSession = Depends(get_session)):
     await rate_limit(request, "login", 10)
     try:
         _, access, refresh, ttl = await service.login(session, str(body.email), body.password)
     except ValueError as e:
         raise unauthorized(str(e))
+    _set_refresh_cookie(response, refresh)
     return TokenPair(access_token=access, refresh_token=refresh, expires_in=ttl)
 
 
 @router.post("/refresh", response_model=TokenPair)
-async def refresh(body: RefreshIn, request: Request, session: AsyncSession = Depends(get_session)):
+async def refresh(body: RefreshIn, request: Request, response: Response, session: AsyncSession = Depends(get_session)):
     await rate_limit(request, "refresh", 30)
+    token = body.refresh_token or request.cookies.get(REFRESH_COOKIE)
+    if not token:
+        raise unauthorized("Refresh ausente")
     try:
-        access, new_refresh, ttl = await service.refresh(session, body.refresh_token)
+        access, new_refresh, ttl = await service.refresh(session, token)
     except ValueError as e:
         raise unauthorized(str(e))
+    _set_refresh_cookie(response, new_refresh)
     return TokenPair(access_token=access, refresh_token=new_refresh, expires_in=ttl)
 
 
@@ -51,19 +89,16 @@ async def refresh(body: RefreshIn, request: Request, session: AsyncSession = Dep
 async def logout(
     body: LogoutIn,
     request: Request,
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ):
-    # deny-list do access atual (se enviado)
-    auth = request.headers.get("authorization", "")
-    if auth.lower().startswith("bearer "):
-        token = auth.split(" ", 1)[1]
-        try:
-            redis = get_redis()
-            await redis.setex(f"denylist:access:{token[-16:]}", 900, "1")
-        except Exception:
-            pass
-    await service.logout(session, body.refresh_token)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    await _deny_access_token(request.headers.get("authorization", ""))
+    token = body.refresh_token or request.cookies.get(REFRESH_COOKIE)
+    if token:
+        await service.logout(session, token)
+    _clear_refresh_cookie(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 
 @router.get("/me", response_model=UserOut)
@@ -92,24 +127,16 @@ async def reset(body: ResetIn, session: AsyncSession = Depends(get_session)):
 async def change(
     body: ChangeIn,
     request: Request,
+    response: Response,
     session: AsyncSession = Depends(get_session),
     user=Depends(get_current_user),
 ):
-    # mantém a sessão atual viva: informa o hash do refresh? Não temos — revoga todos
-    # exceto se o cliente enviar o refresh atual no corpo? Mantém simples: revoga todos
-    # os outros via deny-list do access atual já coberta no logout; aqui revoga todos os
-    # refreshes e o front faz novo login. Decisão: revoga tudo (mais seguro).
+    # Revoga todos os refreshes e derruba o access atual (front faz novo login).
     try:
         await service.change_password(session, user.id, body.current_password, body.new_password)
     except ValueError as e:
         raise unauthorized(str(e))
-    # deny-list do access atual para forçar novo login
-    auth = request.headers.get("authorization", "")
-    if auth.lower().startswith("bearer "):
-        token = auth.split(" ", 1)[1]
-        try:
-            redis = get_redis()
-            await redis.setex(f"denylist:access:{token[-16:]}", 900, "1")
-        except Exception:
-            pass
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    await _deny_access_token(request.headers.get("authorization", ""))
+    _clear_refresh_cookie(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response

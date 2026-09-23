@@ -40,9 +40,7 @@ async def consume(session: AsyncSession, token: str) -> PasswordReset:
         user_id = tokens.decode_token(token, "recovery")
     except ValueError as e:
         raise ValueError(str(e))
-    res = await session.execute(
-        select(PasswordReset).where(PasswordReset.token_hash == tokens.sha256_hex(token))
-    )
+    res = await session.execute(select(PasswordReset).where(PasswordReset.token_hash == tokens.sha256_hex(token)))
     row = res.scalar_one_or_none()
     if row is None or row.used_at is not None or row.expires_at <= tokens._now() or row.user_id != user_id:
         raise ValueError("Token inválido ou expirado")

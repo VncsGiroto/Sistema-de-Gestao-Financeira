@@ -2,7 +2,18 @@ from datetime import date as date_t
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -11,7 +22,9 @@ from app.core.models import TimestampMixin
 
 class Account(Base, TimestampMixin):
     __tablename__ = "accounts"
-    __table_args__ = (CheckConstraint("account_type IN ('CHECKING','SAVINGS','CREDIT_CARD','CASH','OTHER')", name="ck_accounts_type"),)
+    __table_args__ = (
+        CheckConstraint("account_type IN ('CHECKING','SAVINGS','CREDIT_CARD','CASH','OTHER')", name="ck_accounts_type"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -54,4 +67,6 @@ class Transaction(Base, TimestampMixin):
     type: Mapped[str] = mapped_column(String(10), nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="MANUAL")
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    import_id: Mapped[int | None] = mapped_column(ForeignKey("imports.id", ondelete="SET NULL"), nullable=True)  # Épico 3
+    import_id: Mapped[int | None] = mapped_column(
+        ForeignKey("imports.id", ondelete="SET NULL"), nullable=True
+    )  # Épico 3

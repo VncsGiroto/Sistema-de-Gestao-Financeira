@@ -5,6 +5,8 @@ import type { TxFilters } from "../../lib/api-client";
 import { ApiError } from "../../lib/api-client";
 import { useAuth } from "../../lib/auth-store";
 import { useAccounts, useCategories, useTxMutations, useTxs } from "./hooks";
+import { Button, PageHeader } from "../../components/ui";
+import { labelOf, txTypeLabel } from "../../lib/labels";
 
 export function TransactionsPage() {
   const { access, refresh } = useAuth();
@@ -61,65 +63,67 @@ export function TransactionsPage() {
     setF((p) => ({ ...p, [k]: v === "" ? undefined : v, page: 1 }));
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: 32 }}>
-      <h1>Movimentações</h1>
-      {msg && <p style={{ color: "crimson" }}>{msg}</p>}
+    <>
+      <PageHeader title="Movimentações" sub="Receitas e despesas manuais." />
+      {msg && <p className="fw-error">{msg}</p>}
 
-      <form onSubmit={onCreate} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+      <form onSubmit={onCreate} className="fw-row">
+        <select className="fw-select" style={{ width: "auto" }} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
           <option value="">Conta...</option>
           {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+        <select className="fw-select" style={{ width: "auto" }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
           <option value="">Sem categoria</option>
-          {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} ({c.type})</option>)}
+          {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} ({labelOf(txTypeLabel, c.type)})</option>)}
         </select>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input placeholder="Descrição" value={desc} onChange={(e) => setDesc(e.target.value)} />
-        <input placeholder="Valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <select value={type} onChange={(e) => setType(e.target.value)}>
+        <input className="fw-input" style={{ width: "auto" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input className="fw-input" style={{ width: "auto" }} placeholder="Descrição" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <input className="fw-input" style={{ width: "auto" }} placeholder="Valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <select className="fw-select" style={{ width: "auto" }} value={type} onChange={(e) => setType(e.target.value)}>
           <option value="EXPENSE">Despesa</option>
           <option value="INCOME">Receita</option>
         </select>
-        <button>Adicionar</button>
+        <Button type="submit">Adicionar</Button>
       </form>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        <input type="date" value={f.from ?? ""} onChange={(e) => set("from", e.target.value || undefined)} />
-        <input type="date" value={f.to ?? ""} onChange={(e) => set("to", e.target.value || undefined)} />
-        <select value={f.type ?? ""} onChange={(e) => set("type", e.target.value || undefined)}>
+      <div className="fw-row">
+        <input className="fw-input" style={{ width: "auto" }} type="date" value={f.from ?? ""} onChange={(e) => set("from", e.target.value || undefined)} />
+        <input className="fw-input" style={{ width: "auto" }} type="date" value={f.to ?? ""} onChange={(e) => set("to", e.target.value || undefined)} />
+        <select className="fw-select" style={{ width: "auto" }} value={f.type ?? ""} onChange={(e) => set("type", e.target.value || undefined)}>
           <option value="">Tipo...</option>
           <option value="EXPENSE">Despesa</option>
           <option value="INCOME">Receita</option>
         </select>
-        <input placeholder="Buscar..." value={f.q ?? ""} onChange={(e) => set("q", e.target.value || undefined)} />
-        <button onClick={onExport}>Exportar CSV</button>
+        <input className="fw-input" style={{ width: "auto" }} placeholder="Buscar..." value={f.q ?? ""} onChange={(e) => set("q", e.target.value || undefined)} />
+        <Button variant="ghost" onClick={onExport}>Exportar CSV</Button>
       </div>
 
       {isLoading && <p>Carregando...</p>}
-      <table>
+      <table className="fw-table">
         <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Categoria</th><th></th></tr></thead>
         <tbody>
           {(data?.data ?? []).map((t) => (
             <tr key={t.id}>
               <td>{t.date}</td>
               <td>{t.description}</td>
-              <td>{t.amount}</td>
-              <td>{t.type}</td>
+              <td>R$ {t.amount}</td>
+              <td>{labelOf(txTypeLabel, t.type)}</td>
               <td>
-                <select value={t.category_id ?? ""} onChange={(e) => onInlineCategory(t.id, e.target.value)}>
+                <select className="fw-select" value={t.category_id ?? ""} onChange={(e) => onInlineCategory(t.id, e.target.value)}>
                   <option value="">—</option>
                   {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </td>
-              <td><button onClick={() => m.remove.mutateAsync(t.id)}>Excluir</button></td>
+              <td><Button size="sm" variant="danger" onClick={() => m.remove.mutateAsync(t.id)}>Excluir</Button></td>
             </tr>
           ))}
         </tbody>
       </table>
       <p>Total: {data?.meta.total ?? 0} — página {data?.meta.page ?? 1}</p>
-      <button disabled={(f.page ?? 1) <= 1} onClick={() => setF((p) => ({ ...p, page: (p.page ?? 1) - 1 }))}>Anterior</button>
-      <button onClick={() => setF((p) => ({ ...p, page: (p.page ?? 1) + 1 }))}>Próxima</button>
-    </main>
+      <div className="fw-row">
+        <Button variant="ghost" disabled={(f.page ?? 1) <= 1} onClick={() => setF((p) => ({ ...p, page: (p.page ?? 1) - 1 }))}>Anterior</Button>
+        <Button variant="ghost" onClick={() => setF((p) => ({ ...p, page: (p.page ?? 1) + 1 }))}>Próxima</Button>
+      </div>
+    </>
   );
 }

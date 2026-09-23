@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useAccountMutations, useAccounts } from "./hooks";
 import { ApiError } from "../../lib/api-client";
+import { Button, PageHeader } from "../../components/ui";
+import { accountTypeLabel, labelOf } from "../../lib/labels";
 
 const TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH", "OTHER"] as const;
 
@@ -53,39 +55,39 @@ export function AccountsPage() {
   }
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: 32, maxWidth: 720 }}>
-      <h1>Contas</h1>
-      {msg && <p style={{ color: "crimson" }}>{msg}</p>}
-      <form onSubmit={onCreate} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        <input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
-        <input placeholder="Banco" value={bank} onChange={(e) => setBank(e.target.value)} />
-        <select value={type} onChange={(e) => setType(e.target.value)}>
-          {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+    <>
+      <PageHeader title="Contas" sub="Gerencie suas contas e saldos iniciais." />
+      {msg && <p className="fw-error">{msg}</p>}
+      <form onSubmit={onCreate} className="fw-row">
+        <input className="fw-input" style={{ width: "auto" }} placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="fw-input" style={{ width: "auto" }} placeholder="Banco" value={bank} onChange={(e) => setBank(e.target.value)} />
+        <select className="fw-select" style={{ width: "auto" }} value={type} onChange={(e) => setType(e.target.value)}>
+          {TYPES.map((t) => <option key={t} value={t}>{labelOf(accountTypeLabel, t)}</option>)}
         </select>
-        <input placeholder="Saldo inicial" value={balance} onChange={(e) => setBalance(e.target.value)} />
-        <button>Criar</button>
+        <input className="fw-input" style={{ width: "auto" }} placeholder="Saldo inicial" value={balance} onChange={(e) => setBalance(e.target.value)} />
+        <Button type="submit">Criar</Button>
       </form>
       {isLoading && <p>Carregando...</p>}
-      {error && <p style={{ color: "crimson" }}>Falha ao carregar.</p>}
-      <ul>
+      {error && <p className="fw-error">Falha ao carregar.</p>}
+      <ul className="fw-list">
         {(data ?? []).map((a) => (
-          <li key={a.id}>
+          <li className="fw-list-item" key={a.id}>
             {editing === a.id ? (
               <>
-                <input value={editName} onChange={(e) => setEditName(e.target.value)} />
-                <button onClick={() => onRename(a.id)}>Salvar</button>
-                <button onClick={() => setEditing(null)}>Cancelar</button>
+                <input className="fw-input" style={{ width: "auto" }} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                <Button size="sm" onClick={() => onRename(a.id)}>Salvar</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button>
               </>
             ) : (
               <>
-                {a.name} ({a.account_type}) — R$ {a.initial_balance}
-                <button onClick={() => { setEditing(a.id); setEditName(a.name); }}>Renomear</button>
-                <button onClick={() => onDelete(a.id)}>Excluir</button>
+                <span><strong>{a.name}</strong> ({labelOf(accountTypeLabel, a.account_type)}) — R$ {a.initial_balance}</span>
+                <Button size="sm" variant="ghost" onClick={() => { setEditing(a.id); setEditName(a.name); }}>Renomear</Button>
+                <Button size="sm" variant="danger" onClick={() => onDelete(a.id)}>Excluir</Button>
               </>
             )}
           </li>
         ))}
       </ul>
-    </main>
+    </>
   );
 }

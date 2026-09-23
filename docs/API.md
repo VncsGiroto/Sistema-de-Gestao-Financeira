@@ -47,11 +47,15 @@ POST /api/imports/{id}/commit → 200 {imported_rows} (só após review dos FUZZ
 ## 4. Bills / Installments / Dashboard
 
 ```
-GET+POST /api/bills · GET+PATCH+DELETE /api/bills/{id}
-GET+POST /api/installments → calcula parcelas (ver TESTING p/ arredondamento)
-GET /api/installments/{id}/schedule → [{n,due_date,amount}]
+GET+POST /api/bills (+ GET /upcoming?days= · GET+PATCH+DELETE /api/bills/{id})
+GET+POST /api/installments (+ GET+PATCH+DELETE /{id})
+GET /api/installments/{id}/schedule → [{n,due_date,amount}] (soma == total)
 GET /api/dashboard?from=&to=&account_id= → {balance, income:{total,by_category[]}, expense:{total,by_category[]}, evolution:[{month,income,expense}]}
+GET /api/dashboard/commitments?horizon_days=60 → {total, items[{kind,description,due_date,amount,ref_id}]}
+GET /api/transactions/export/csv → CSV `;` com BOM (mesmos filtros da listagem)
 ```
+
+Refresh também via cookie HttpOnly `fw_refresh` (corpo mantido por compat).
 
 Exemplo dashboard:
 ```json

@@ -20,10 +20,9 @@ async def oac(monkeypatch):
         pytest.skip("TEST_DATABASE_URL ausente")
     monkeypatch.setenv("DATABASE_URL", DB_URL)
     monkeypatch.setenv("REDIS_URL", REDIS_URL or "redis://localhost:6379/0")
-    from app.main import app
-
     import app.core.db as dbmod
     from app.core.db import Base
+    from app.main import app
 
     engine = create_async_engine(DB_URL, pool_pre_ping=True)
     async with engine.begin() as conn:
@@ -69,7 +68,9 @@ async def test_upload_parse_e_itens(oac):
     acc = await _account(ac, h)
     raw = (FIX / "minimo.ofx").read_bytes()
 
-    r = await ac.post("/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("extrato.ofx", raw)}, headers=h)
+    r = await ac.post(
+        "/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("extrato.ofx", raw)}, headers=h
+    )
     assert r.status_code == 202, r.text
     imp_id = r.json()["import_id"]
 
@@ -91,7 +92,9 @@ async def test_upload_parse_e_itens(oac):
     assert r.status_code == 200 and len(r.json()) == 1
 
     # re-upload: novo import_id (idempotência de conteúdo vem no 3.2)
-    r = await ac.post("/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("extrato.ofx", raw)}, headers=h)
+    r = await ac.post(
+        "/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("extrato.ofx", raw)}, headers=h
+    )
     assert r.status_code == 202 and r.json()["import_id"] != imp_id
 
 
@@ -105,17 +108,32 @@ async def test_arquivo_invalido_e_regras(oac):
 
     # conta de outro usuário → 404
     h2 = await _user(oac, "outro")
-    r = await ac.post("/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("e.ofx", (FIX / "minimo.ofx").read_bytes())}, headers=h2)
+    r = await ac.post(
+        "/api/imports/ofx",
+        data={"account_id": str(acc)},
+        files={"file": ("e.ofx", (FIX / "minimo.ofx").read_bytes())},
+        headers=h2,
+    )
     assert r.status_code == 404
 
     # conteúdo malformado → FAILED legível
-    r = await ac.post("/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("q.ofx", (FIX / "invalido.ofx").read_bytes())}, headers=h)
+    r = await ac.post(
+        "/api/imports/ofx",
+        data={"account_id": str(acc)},
+        files={"file": ("q.ofx", (FIX / "invalido.ofx").read_bytes())},
+        headers=h,
+    )
     assert r.status_code == 202
     final = await _wait_validated(ac, r.json()["import_id"], h)
     assert final["status"] == "FAILED" and final["error"]
 
     # import de outro usuário → 404
-    r = await ac.post("/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("e.ofx", (FIX / "minimo.ofx").read_bytes())}, headers=h)
+    r = await ac.post(
+        "/api/imports/ofx",
+        data={"account_id": str(acc)},
+        files={"file": ("e.ofx", (FIX / "minimo.ofx").read_bytes())},
+        headers=h,
+    )
     imp_id = r.json()["import_id"]
     await _wait_validated(ac, imp_id, h)
     assert (await ac.get(f"/api/imports/{imp_id}", headers=h2)).status_code == 404
@@ -139,12 +157,19 @@ async def test_upload_c6_headers_exoticos(oac):
 
 
 def _grande_ofx(n: int = 5000) -> bytes:
-    head = (FIX / "minimo.ofx").read_text().split("<BANKTRANLIST>")[0] + "<BANKTRANLIST>\n<DTSTART>20260101\n<DTEND>20261231\n"
+    head = (FIX / "minimo.ofx").read_text().split("<BANKTRANLIST>")[
+        0
+    ] + "<BANKTRANLIST>\n<DTSTART>20260101\n<DTEND>20261231\n"
     rows = "".join(
-        f"<STMTTRN>\n<TRNTYPE>DEBIT\n<DTPOSTED>20260615\n<TRNAMT>-{i % 900 + 1}.00\n<FITID>G{i:06d}\n<NAME>LOJA {i}\n<MEMO>COMPRA {i}\n</STMTTRN>\n"
+        f"<STMTTRN>\n<TRNTYPE>DEBIT\n<DTPOSTED>20260615\n<TRNAMT>-{i % 900 + 1}.00\n"
+        f"<FITID>G{i:06d}\n<NAME>LOJA {i}\n<MEMO>COMPRA {i}\n</STMTTRN>\n"
         for i in range(n)
     )
-    return (head + rows + "</BANKTRANLIST>\n<LEDGERBAL>\n<BALAMT>0\n<DTASOF>20261231\n</LEDGERBAL>\n</STMTRS>\n</STMTTRNRS>\n</BANKMSGSRSV1>\n</OFX>\n").encode()
+    tail = (
+        "</BANKTRANLIST>\n<LEDGERBAL>\n<BALAMT>0\n<DTASOF>20261231\n</LEDGERBAL>\n"
+        "</STMTRS>\n</STMTTRNRS>\n</BANKMSGSRSV1>\n</OFX>\n"
+    )
+    return (head + rows + tail).encode()
 
 
 async def test_upload_grande_rapido(oac):

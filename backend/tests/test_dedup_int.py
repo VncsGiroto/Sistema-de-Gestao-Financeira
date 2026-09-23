@@ -20,10 +20,9 @@ async def dac(monkeypatch):
         pytest.skip("TEST_DATABASE_URL ausente")
     monkeypatch.setenv("DATABASE_URL", DB_URL)
     monkeypatch.setenv("REDIS_URL", REDIS_URL or "redis://localhost:6379/0")
-    from app.main import app
-
     import app.core.db as dbmod
     from app.core.db import Base
+    from app.main import app
 
     engine = create_async_engine(DB_URL, pool_pre_ping=True)
     async with engine.begin() as conn:
@@ -49,8 +48,12 @@ async def _user(ac: AsyncClient, tag: str):
 
 
 async def _upload(ac, h, acc: int, fname: str) -> int:
-    r = await ac.post("/api/imports/ofx", data={"account_id": str(acc)},
-                      files={"file": (fname, (FIX / fname).read_bytes())}, headers=h)
+    r = await ac.post(
+        "/api/imports/ofx",
+        data={"account_id": str(acc)},
+        files={"file": (fname, (FIX / fname).read_bytes())},
+        headers=h,
+    )
     assert r.status_code == 202, r.text
     return r.json()["import_id"]
 
@@ -67,9 +70,11 @@ async def _wait(ac, imp_id: int, h: dict, want: str = "VALIDATED"):
 
 
 async def _manual(ac, h, acc: int, d: str, desc: str, amt: str, t: str):
-    r = await ac.post("/api/transactions",
-                      json={"account_id": acc, "date": d, "description": desc, "amount": amt, "type": t},
-                      headers=h)
+    r = await ac.post(
+        "/api/transactions",
+        json={"account_id": acc, "date": d, "description": desc, "amount": amt, "type": t},
+        headers=h,
+    )
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -104,7 +109,9 @@ async def test_exact_fuzzy_review_commit(dac):
 
     # review: descarta o EXACT → commit importa só o NEW
     ex_id = by_v["EXACT_DUPLICATE"]["id"]
-    r = await ac.post(f"/api/imports/{d}/review", json={"decisions": [{"item_id": ex_id, "decision": "DISCARD_IMPORTED"}]}, headers=h)
+    r = await ac.post(
+        f"/api/imports/{d}/review", json={"decisions": [{"item_id": ex_id, "decision": "DISCARD_IMPORTED"}]}, headers=h
+    )
     assert r.status_code == 200 and r.json() == {"decided": 1}
     r = await ac.post(f"/api/imports/{d}/commit", headers=h)
     assert r.status_code == 200 and r.json() == {"imported_rows": 1, "duplicate_rows": 1, "skipped": 0}
@@ -120,10 +127,16 @@ async def test_exact_fuzzy_review_commit(dac):
     assert all(it["payload"].get("score", 0) >= 0.70 for it in r.json())
 
     fz = {it["payload"]["external_id"]: it["id"] for it in r.json()}
-    r = await ac.post(f"/api/imports/{f}/review", json={"decisions": [
-        {"item_id": fz["FZ000001"], "decision": "KEEP_BOTH"},
-        {"item_id": fz["FZ000002"], "decision": "DISCARD_IMPORTED"},
-    ]}, headers=h)
+    r = await ac.post(
+        f"/api/imports/{f}/review",
+        json={
+            "decisions": [
+                {"item_id": fz["FZ000001"], "decision": "KEEP_BOTH"},
+                {"item_id": fz["FZ000002"], "decision": "DISCARD_IMPORTED"},
+            ]
+        },
+        headers=h,
+    )
     assert r.status_code == 200
     r = await ac.post(f"/api/imports/{f}/commit", headers=h)
     assert r.status_code == 200, r.text
@@ -142,11 +155,25 @@ async def test_review_commit_isolamento(dac):
     imp = await _upload(ac, h1, acc, "minimo.ofx")
     await _wait(ac, imp, h1)
 
-    assert (await ac.post(f"/api/imports/{imp}/review", json={"decisions": [{"item_id": 1, "decision": "DISCARD_IMPORTED"}]}, headers=h2)).status_code == 404
+    assert (
+        await ac.post(
+            f"/api/imports/{imp}/review",
+            json={"decisions": [{"item_id": 1, "decision": "DISCARD_IMPORTED"}]},
+            headers=h2,
+        )
+    ).status_code == 404
     assert (await ac.post(f"/api/imports/{imp}/commit", headers=h2)).status_code == 404
 
     # review de item NEW → 422; decision inválida → 422
     r = await ac.get(f"/api/imports/{imp}/items?verdict=NEW", headers=h1)
     nid = r.json()[0]["id"]
-    assert (await ac.post(f"/api/imports/{imp}/review", json={"decisions": [{"item_id": nid, "decision": "DISCARD_IMPORTED"}]}, headers=h1)).status_code == 422
-    assert (await ac.post(f"/api/imports/{imp}/review", json={"decisions": [{"item_id": nid, "decision": "X"}]}, headers=h1)).status_code == 422
+    assert (
+        await ac.post(
+            f"/api/imports/{imp}/review",
+            json={"decisions": [{"item_id": nid, "decision": "DISCARD_IMPORTED"}]},
+            headers=h1,
+        )
+    ).status_code == 422
+    assert (
+        await ac.post(f"/api/imports/{imp}/review", json={"decisions": [{"item_id": nid, "decision": "X"}]}, headers=h1)
+    ).status_code == 422

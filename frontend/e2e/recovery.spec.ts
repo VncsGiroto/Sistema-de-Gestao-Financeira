@@ -18,7 +18,7 @@ test("recover responde sem vazar existência + change troca a senha", async ({ p
   await page.goto("/app/security");
   await page.getByPlaceholder("Senha atual").fill("segredo-123");
   await page.getByPlaceholder(/Nova senha/).fill("nova-senha-2");
-  await page.getByRole("button", { name: /trocar senha/i }).click();
+  await page.locator("form").getByRole("button", { name: /trocar senha/i }).click();
   await expect(page).toHaveURL(/login/, { timeout: 15000 });
 
   await page.getByPlaceholder("E-mail").fill(email);

@@ -13,11 +13,12 @@ class LoginIn(BaseModel):
 
 
 class RefreshIn(BaseModel):
-    refresh_token: str = Field(min_length=10)
+    # Opcional: quando ausente, o refresh vem do cookie HttpOnly fw_refresh
+    refresh_token: str | None = Field(default=None, min_length=10)
 
 
 class LogoutIn(BaseModel):
-    refresh_token: str = Field(min_length=10)
+    refresh_token: str | None = Field(default=None, min_length=10)
 
 
 class TokenPair(BaseModel):

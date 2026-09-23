@@ -1,8 +1,9 @@
 """0005 imports + import_items + transactions.import_id (Épico 3)."""
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 
 revision = "0005_imports"
 down_revision = "0004_transactions"
@@ -29,7 +30,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["account_id"], ["accounts.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.CheckConstraint("status IN ('RECEIVED','PROCESSING','VALIDATED','IMPORTED','FAILED')", name="ck_imports_status"),
+        sa.CheckConstraint(
+            "status IN ('RECEIVED','PROCESSING','VALIDATED','IMPORTED','FAILED')", name="ck_imports_status"
+        ),
     )
     op.create_index("ix_imports_user", "imports", ["user_id"])
     op.create_table(

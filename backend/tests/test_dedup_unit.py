@@ -29,7 +29,13 @@ def test_similarity_ordem_trocada():
 
 
 def _cand(**kw):
-    base = {"id": 1, "account_id": 5, "date": date(2026, 9, 10), "description": "IFOOD JANTAR", "amount": Decimal("-45.90")}
+    base = {
+        "id": 1,
+        "account_id": 5,
+        "date": date(2026, 9, 10),
+        "description": "IFOOD JANTAR",
+        "amount": Decimal("-45.90"),
+    }
     base.update(kw)
     return Candidate(**base)
 

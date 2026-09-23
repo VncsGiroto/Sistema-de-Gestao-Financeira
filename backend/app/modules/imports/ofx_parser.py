@@ -110,12 +110,14 @@ def parse_ofx(raw: bytes) -> list[RawTx]:
     for stmt in statements:
         for t in stmt.transactions or []:
             d = t.date.date() if getattr(t, "date", None) else None
-            out.append(RawTx(
-                fitid=(str(t.id).strip() if getattr(t, "id", None) else None) or None,
-                date=d,
-                amount=_to_decimal(getattr(t, "amount", None)),
-                memo=str(getattr(t, "memo", "") or ""),
-                name=str(getattr(t, "payee", "") or ""),
-                trntype=str(getattr(t, "type", "") or "").upper(),
-            ))
+            out.append(
+                RawTx(
+                    fitid=(str(t.id).strip() if getattr(t, "id", None) else None) or None,
+                    date=d,
+                    amount=_to_decimal(getattr(t, "amount", None)),
+                    memo=str(getattr(t, "memo", "") or ""),
+                    name=str(getattr(t, "payee", "") or ""),
+                    trntype=str(getattr(t, "type", "") or "").upper(),
+                )
+            )
     return out

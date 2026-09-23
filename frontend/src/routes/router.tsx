@@ -8,6 +8,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { useAuth } from "../lib/auth-store";
+import { Shell } from "../components/Shell";
 import { DashboardPage } from "../features/dashboard/page";
 import { SecurityPage } from "../features/dashboard/security";
 import { LoginPage, RecoverPage, RegisterPage, ResetPage } from "../features/auth/pages";
@@ -16,6 +17,8 @@ import { CategoriesPage } from "../features/finance/categories";
 import { TransactionsPage } from "../features/finance/transactions";
 import { ImportsPage } from "../features/imports/list";
 import { ReviewPage } from "../features/imports/review";
+import { BillsPage } from "../features/bills/page";
+import { InstallmentsPage } from "../features/installments/page";
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { access, ready, refresh } = useAuth();
@@ -32,7 +35,7 @@ function Guard({ children }: { children: React.ReactNode }) {
 
   if (!ready) return <p style={{ padding: 32 }}>Carregando...</p>;
   if (!access) return <p style={{ padding: 32 }}>Redirecionando para login...</p>;
-  return <>{children}</>;
+  return <Shell>{children}</Shell>;
 }
 
 const rootRoute = createRootRoute({ component: () => <Outlet /> });
@@ -107,8 +110,26 @@ const reviewRoute = createRoute({
     );
   },
 });
+const billsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app/bills",
+  component: () => (
+    <Guard>
+      <BillsPage />
+    </Guard>
+  ),
+});
+const installmentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app/installments",
+  component: () => (
+    <Guard>
+      <InstallmentsPage />
+    </Guard>
+  ),
+});
 
-const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, recoverRoute, resetRoute, appRoute, securityRoute, accountsRoute, categoriesRoute, transactionsRoute, importsRoute, reviewRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, recoverRoute, resetRoute, appRoute, securityRoute, accountsRoute, categoriesRoute, transactionsRoute, importsRoute, reviewRoute, billsRoute, installmentsRoute]);
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {

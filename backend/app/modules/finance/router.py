@@ -32,8 +32,11 @@ not_found = lambda: http_error(status.HTTP_404_NOT_FOUND, "Not Found", "Recurso 
 
 def _account_out(row) -> AccountOut:
     return AccountOut(
-        id=row.id, name=row.name, bank=row.bank,
-        account_type=row.account_type, initial_balance=row.initial_balance,
+        id=row.id,
+        name=row.name,
+        bank=row.bank,
+        account_type=row.account_type,
+        initial_balance=row.initial_balance,
     )
 
 
@@ -57,7 +60,9 @@ async def get_account(account_id: int, session: AsyncSession = Depends(get_sessi
 
 
 @accounts.patch("/{account_id}", response_model=AccountOut)
-async def patch_account(account_id: int, body: AccountPatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def patch_account(
+    account_id: int, body: AccountPatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     row = await repo.get_account(session, user.id, account_id)
     if row is None:
         raise not_found()
@@ -92,7 +97,9 @@ async def list_categories(
 
 
 @categories.post("", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)
-async def create_category(body: CategoryIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def create_category(
+    body: CategoryIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     row = await repo.create_category(session, user.id, body.name, body.type)
     return CategoryOut(id=row.id, name=row.name, type=row.type)
 
@@ -106,7 +113,9 @@ async def get_category(category_id: int, session: AsyncSession = Depends(get_ses
 
 
 @categories.patch("/{category_id}", response_model=CategoryOut)
-async def patch_category(category_id: int, body: CategoryPatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def patch_category(
+    category_id: int, body: CategoryPatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     row = await repo.get_category(session, user.id, category_id)
     if row is None:
         raise not_found()
@@ -118,7 +127,9 @@ async def patch_category(category_id: int, body: CategoryPatch, session: AsyncSe
 
 
 @categories.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_category(category_id: int, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def delete_category(
+    category_id: int, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     row = await repo.get_category(session, user.id, category_id)
     if row is None:
         raise not_found()
@@ -128,8 +139,14 @@ async def delete_category(category_id: int, session: AsyncSession = Depends(get_
 
 def _tx_out(row) -> TxOut:
     return TxOut(
-        id=row.id, account_id=row.account_id, category_id=row.category_id, date=row.date,
-        description=row.description, amount=row.amount, type=row.type, source=row.source,
+        id=row.id,
+        account_id=row.account_id,
+        category_id=row.category_id,
+        date=row.date,
+        description=row.description,
+        amount=row.amount,
+        type=row.type,
+        source=row.source,
     )
 
 
@@ -163,8 +180,14 @@ async def list_txs(
 async def create_tx(body: TxIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
     try:
         row = await repo.create_tx(
-            session, user.id, body.account_id, body.category_id,
-            body.date, body.description, body.amount, body.type,
+            session,
+            user.id,
+            body.account_id,
+            body.category_id,
+            body.date,
+            body.description,
+            body.amount,
+            body.type,
         )
     except LookupError:
         raise not_found()
@@ -180,14 +203,20 @@ async def get_tx(tx_id: int, session: AsyncSession = Depends(get_session), user=
 
 
 @transactions.patch("/{tx_id}", response_model=TxOut)
-async def patch_tx(tx_id: int, body: TxPatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def patch_tx(
+    tx_id: int, body: TxPatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     row = await repo.get_tx(session, user.id, tx_id)
     if row is None:
         raise not_found()
     data = body.model_dump(exclude_unset=True)
     if "account_id" in data and await repo.get_account(session, user.id, data["account_id"]) is None:
         raise not_found()
-    if "category_id" in data and data["category_id"] is not None and await repo.get_category(session, user.id, data["category_id"]) is None:
+    if (
+        "category_id" in data
+        and data["category_id"] is not None
+        and await repo.get_category(session, user.id, data["category_id"]) is None
+    ):
         raise not_found()
     for k, v in data.items():
         setattr(row, k, v)
@@ -221,7 +250,18 @@ async def export_csv(
     w = csv.writer(buf, delimiter=";")
     w.writerow(["id", "date", "description", "amount", "type", "account", "category", "source"])
     for r in rows:
-        w.writerow([r.id, r.date.isoformat(), r.description, f"{r.amount:.2f}", r.type, accs.get(r.account_id, ""), cats.get(r.category_id, "") if r.category_id else "", r.source])
+        w.writerow(
+            [
+                r.id,
+                r.date.isoformat(),
+                r.description,
+                f"{r.amount:.2f}",
+                r.type,
+                accs.get(r.account_id, ""),
+                cats.get(r.category_id, "") if r.category_id else "",
+                r.source,
+            ]
+        )
     return Response(
         content="\ufeff" + buf.getvalue(),
         media_type="text/csv; charset=utf-8",

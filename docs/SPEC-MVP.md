@@ -14,14 +14,15 @@ Fora do MVP (pós-MVP): Pluggy/Belvo, APIs bancárias/Open Finance, holerites, i
 | Camada | Decisão | Versão base |
 |---|---|---|
 | Backend | Python + FastAPI + SQLAlchemy 2 async + Alembic + Pydantic v2 | Python 3.13 |
-| Frontend Web | React + Vite + TypeScript + TanStack Router/Query + Tailwind + shadcn/ui + ECharts | React 19, Vite 6, TS 5.6, Node 22 |
+| Frontend Web | React + Vite + TypeScript + TanStack Router/Query + ECharts | React 19, Vite 6, TS 5.6, Node 22 |
 | Banco | PostgreSQL | 16 |
 | Cache/Fila/Rate-limit | Redis | 7 |
 | Proxy | Nginx (reverse proxy + estáticos do front + headers segurança) | 1.27 |
-| Auth | JWT access 15min + refresh 30d rotativo com reuse-detection | — |
+| Auth | JWT access 15min + refresh 30d rotativo com reuse-detection; refresh em cookie HttpOnly `fw_refresh` | — |
 | Hash senha | Argon2id (fallback bcrypt) | — |
 | API | REST + OpenAPI 3.1 em `/api/docs` (Swagger) + `/api/redoc` | — |
 | Testes | pytest + httpx (unit/int API), Vitest + Playwright (front/e2e) | — |
+| Qualidade | ruff + mypy (backend, `pyproject.toml`), eslint + tsc (front) | — |
 | Containers | Docker + Docker Compose | — |
 | CI/CD | GitHub Actions | — |
 

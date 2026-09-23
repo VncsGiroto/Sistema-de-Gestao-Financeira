@@ -1,0 +1,20 @@
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+# E731 ignorado: routers usam lambdas curtas p/ erros HTTP com # noqa pontual
+extend-select = ["F", "E", "W", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = false
+ignore_missing_imports = false
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "ofxparse.*"
+ignore_missing_imports = true

@@ -15,6 +15,8 @@ from app.core.db import Base
 import app.modules.auth.audit_models  # noqa: F401
 import app.modules.auth.models  # noqa: F401
 import app.modules.auth.recovery_models  # noqa: F401
+import app.modules.finance.models  # noqa: F401
+import app.modules.imports.models  # noqa: F401
 import app.modules.users.models  # noqa: F401
 
 target_metadata = Base.metadata

@@ -11,6 +11,11 @@ import { useAuth } from "../lib/auth-store";
 import { DashboardPage } from "../features/dashboard/page";
 import { SecurityPage } from "../features/dashboard/security";
 import { LoginPage, RecoverPage, RegisterPage, ResetPage } from "../features/auth/pages";
+import { AccountsPage } from "../features/finance/accounts";
+import { CategoriesPage } from "../features/finance/categories";
+import { TransactionsPage } from "../features/finance/transactions";
+import { ImportsPage } from "../features/imports/list";
+import { ReviewPage } from "../features/imports/review";
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { access, ready, refresh } = useAuth();
@@ -54,8 +59,56 @@ const securityRoute = createRoute({
     </Guard>
   ),
 });
+const accountsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app/accounts",
+  component: () => (
+    <Guard>
+      <AccountsPage />
+    </Guard>
+  ),
+});
+const categoriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app/categories",
+  component: () => (
+    <Guard>
+      <CategoriesPage />
+    </Guard>
+  ),
+});
+const transactionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app/transactions",
+  component: () => (
+    <Guard>
+      <TransactionsPage />
+    </Guard>
+  ),
+});
+const importsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app/imports",
+  component: () => (
+    <Guard>
+      <ImportsPage />
+    </Guard>
+  ),
+});
+const reviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app/imports/$id",
+  component: function ReviewRoute() {
+    const { id } = reviewRoute.useParams();
+    return (
+      <Guard>
+        <ReviewPage id={Number(id)} />
+      </Guard>
+    );
+  },
+});
 
-const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, recoverRoute, resetRoute, appRoute, securityRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, recoverRoute, resetRoute, appRoute, securityRoute, accountsRoute, categoriesRoute, transactionsRoute, importsRoute, reviewRoute]);
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {

@@ -40,6 +40,12 @@ export function DashboardPage() {
         <button onClick={onLogout}>Sair</button>{" "}
         <button onClick={() => navigate({ to: "/app/security" })}>Trocar senha</button>
       </p>
+      <nav style={{ display: "flex", gap: 12 }}>
+        <button onClick={() => navigate({ to: "/app/accounts" })}>Contas</button>
+        <button onClick={() => navigate({ to: "/app/categories" })}>Categorias</button>
+        <button onClick={() => navigate({ to: "/app/transactions" })}>Movimentações</button>
+        <button onClick={() => navigate({ to: "/app/imports" })}>Importações</button>
+      </nav>
     </main>
   );
 }

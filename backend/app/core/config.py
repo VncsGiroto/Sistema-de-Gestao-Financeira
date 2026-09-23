@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     jwt_alg: str = "HS256"
     access_ttl: int = 900
     refresh_ttl: int = 2592000
+    ofx_dir: str = "/data/ofx"
+    ofx_max_bytes: int = 10 * 1024 * 1024
+    dedup_window_days: int = 2
 
 
 settings = Settings()

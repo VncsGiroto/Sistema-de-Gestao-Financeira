@@ -35,6 +35,12 @@ async def client(monkeypatch):
         await conn.run_sync(Base.metadata.create_all)
     dbmod.engine = engine
     dbmod.SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+    # isola rate-limit/deny-list entre testes
+    import redis.asyncio as aioredis
+
+    rc = aioredis.from_url(REDIS_URL or "redis://localhost:6379/0", decode_responses=True)
+    await rc.flushdb()
+    await rc.aclose()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac

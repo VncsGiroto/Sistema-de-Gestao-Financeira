@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.modules.auth.router import router as auth_router
+from app.modules.finance.router import accounts as accounts_router
+from app.modules.finance.router import categories as categories_router
+from app.modules.finance.router import transactions as transactions_router
+from app.modules.imports.router import router as imports_router
 
 app = FastAPI(title=settings.app_name, docs_url="/api/docs", redoc_url="/api/redoc")
 
@@ -15,6 +19,10 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(accounts_router)
+app.include_router(categories_router)
+app.include_router(transactions_router)
+app.include_router(imports_router)
 
 
 @app.get("/api/health")

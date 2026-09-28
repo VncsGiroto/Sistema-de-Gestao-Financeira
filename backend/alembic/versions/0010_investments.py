@@ -1,7 +1,8 @@
 """0010 investments: assets + investment_ops (Épico 7.1, livro de operações)."""
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0010_investments"
 down_revision = "0009_payables"

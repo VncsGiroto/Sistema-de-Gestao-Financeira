@@ -1,14 +1,16 @@
 """Histórico da brapi (7.3): série diária p/ benchmarks e TWR."""
 
-import httpx
 from datetime import date, datetime
+
+import httpx
 
 from app.core.config import settings
 from app.modules.market.brapi import BrapiError, _headers, _raise_for_status
 
 
-async def history(symbol: str, start: date, end: date, token: str | None = None,
-                  client: httpx.AsyncClient | None = None) -> list[dict]:
+async def history(
+    symbol: str, start: date, end: date, token: str | None = None, client: httpx.AsyncClient | None = None
+) -> list[dict]:
     """Retorna [{date, close}] com adjustedClose ascendente."""
     from app.modules.market.brapi import BrapiAuthError
 
@@ -20,9 +22,13 @@ async def history(symbol: str, start: date, end: date, token: str | None = None,
     try:
         res = await client.get(
             f"{settings.brapi_base_url}/v2/stocks/historical",
-            params={"symbols": symbol.strip().upper(), "interval": "1d",
-                    "startDate": start.isoformat(), "endDate": end.isoformat(),
-                    "sortOrder": "asc"},
+            params={
+                "symbols": symbol.strip().upper(),
+                "interval": "1d",
+                "startDate": start.isoformat(),
+                "endDate": end.isoformat(),
+                "sortOrder": "asc",
+            },
             headers=_headers(tok),
         )
     except httpx.TimeoutException as e:

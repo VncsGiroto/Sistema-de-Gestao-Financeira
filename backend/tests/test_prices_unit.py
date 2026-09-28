@@ -50,21 +50,30 @@ def test_accrue_prefixado_valor():
 
 def test_accrue_tipo_nao_suportado():
     with pytest.raises(ValueError):
-        acc.accrue_lots([{"qty": Decimal("1"), "price": Decimal("1"), "date": date(2026, 9, 25)}],
-                        "IPCA_MAIS", Decimal("6"), date(2026, 9, 30), {})
+        acc.accrue_lots(
+            [{"qty": Decimal("1"), "price": Decimal("1"), "date": date(2026, 9, 25)}],
+            "IPCA_MAIS",
+            Decimal("6"),
+            date(2026, 9, 30),
+            {},
+        )
 
 
 async def test_bcb_parse_mock():
     def handler(request: httpx.Request) -> httpx.Response:
         assert "bcdata.sgs.12" in str(request.url)
         assert request.url.params["formato"] == "json"
-        return httpx.Response(200, json=[
-            {"data": "25/09/2026", "valor": "0.0527"},
-            {"data": "lixo", "valor": "x"},  # linha ruim é ignorada
-        ])
+        return httpx.Response(
+            200,
+            json=[
+                {"data": "25/09/2026", "valor": "0.0527"},
+                {"data": "lixo", "valor": "x"},  # linha ruim é ignorada
+            ],
+        )
 
-    series = await bcb.cdi_range(date(2026, 9, 25), date(2026, 9, 28),
-                                 client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    series = await bcb.cdi_range(
+        date(2026, 9, 25), date(2026, 9, 28), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
     assert series == {date(2026, 9, 25): Decimal("0.0527")}
 
 
@@ -73,8 +82,9 @@ async def test_bcb_erro_status():
         return httpx.Response(500, json={})
 
     with pytest.raises(bcb.BcbError):
-        await bcb.cdi_range(date(2026, 9, 25), date(2026, 9, 25),
-                            client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+        await bcb.cdi_range(
+            date(2026, 9, 25), date(2026, 9, 25), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        )
 
 
 async def test_bcb_range_invertido():
@@ -88,8 +98,7 @@ def test_xirr_caso_conhecido():
 
 def test_xirr_sem_troca_de_sinal():
     assert ret.xirr([(date(2025, 1, 1), Decimal("-1000"))]) is None
-    assert ret.xirr([(date(2025, 1, 1), Decimal("-100")),
-                     (date(2026, 1, 1), Decimal("-50"))]) is None
+    assert ret.xirr([(date(2025, 1, 1), Decimal("-100")), (date(2026, 1, 1), Decimal("-50"))]) is None
 
 
 def test_twr_cotas():

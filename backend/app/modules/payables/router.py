@@ -25,19 +25,29 @@ unprocessable = lambda d: http_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unpr
 
 def _out(r) -> PayableOut:
     return PayableOut(
-        id=r.id, description=r.description, kind=r.kind, amount=r.amount,
-        periodicity=r.periodicity, due_day=r.due_day, next_due=r.next_due,
-        total_amount=r.total_amount, num_installments=r.num_installments,
-        installment_amount=r.installment_amount, first_due_date=r.first_due_date,
-        paid_ns=r.paid_ns or [], paid_at=r.paid_at,
-        account_id=r.account_id, category_id=r.category_id,
+        id=r.id,
+        description=r.description,
+        kind=r.kind,
+        amount=r.amount,
+        periodicity=r.periodicity,
+        due_day=r.due_day,
+        next_due=r.next_due,
+        total_amount=r.total_amount,
+        num_installments=r.num_installments,
+        installment_amount=r.installment_amount,
+        first_due_date=r.first_due_date,
+        paid_ns=r.paid_ns or [],
+        paid_at=r.paid_at,
+        account_id=r.account_id,
+        category_id=r.category_id,
     )
 
 
 @router.get("", response_model=list[PayableOut])
 async def list_all(
     kind: str | None = Query(default=None, pattern="^(FIXED|RECURRING|INSTALLMENT|ONE_TIME)$"),
-    session: AsyncSession = Depends(get_session), user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ):
     return [_out(r) for r in await repo.list_all(session, user.id, kind)]
 
@@ -46,7 +56,8 @@ async def list_all(
 @router.get("/upcoming", response_model=list[PayableOut])
 async def upcoming(
     days: int = Query(default=30, ge=1, le=365),
-    session: AsyncSession = Depends(get_session), user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ):
     return [_out(r) for r in await repo.upcoming(session, user.id, days, date.today())]
 
@@ -55,10 +66,20 @@ async def upcoming(
 async def create(body: PayableIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
     try:
         row = await repo.create(
-            session, user.id, body.description, body.kind, body.amount,
-            body.periodicity, body.due_day, body.next_due, body.total_amount,
-            body.num_installments, body.first_due_date, body.account_id,
-            body.category_id, date.today(),
+            session,
+            user.id,
+            body.description,
+            body.kind,
+            body.amount,
+            body.periodicity,
+            body.due_day,
+            body.next_due,
+            body.total_amount,
+            body.num_installments,
+            body.first_due_date,
+            body.account_id,
+            body.category_id,
+            date.today(),
         )
     except repo.PayableError as e:
         raise unprocessable(str(e))
@@ -88,9 +109,12 @@ async def get_schedule(payable_id: int, session: AsyncSession = Depends(get_sess
 
 
 @router.patch("/{payable_id}", response_model=PayableOut)
-async def patch(payable_id: int, body: PayablePatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
-    from app.modules.finance.models import Account, Category
+async def patch(
+    payable_id: int, body: PayablePatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     from sqlalchemy import select
+
+    from app.modules.finance.models import Account, Category
 
     row = await repo.get_one(session, user.id, payable_id)
     if row is None:
@@ -98,13 +122,17 @@ async def patch(payable_id: int, body: PayablePatch, session: AsyncSession = Dep
     data = body.model_dump(exclude_unset=True)
     if "account_id" in data:
         if data["account_id"] is not None:
-            res = await session.execute(select(Account).where(Account.id == data["account_id"], Account.user_id == user.id))
+            res = await session.execute(
+                select(Account).where(Account.id == data["account_id"], Account.user_id == user.id)
+            )
             if res.scalar_one_or_none() is None:
                 raise not_found()
         row.account_id = data["account_id"]
     if "category_id" in data:
         if data["category_id"] is not None:
-            res = await session.execute(select(Category).where(Category.id == data["category_id"], Category.user_id == user.id))
+            res = await session.execute(
+                select(Category).where(Category.id == data["category_id"], Category.user_id == user.id)
+            )
             if res.scalar_one_or_none() is None:
                 raise not_found()
         row.category_id = data["category_id"]
@@ -124,14 +152,23 @@ async def patch(payable_id: int, body: PayablePatch, session: AsyncSession = Dep
 
 
 @router.post("/{payable_id}/pay", response_model=PayOut)
-async def pay(payable_id: int, body: PayIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def pay(
+    payable_id: int, body: PayIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     row = await repo.get_one(session, user.id, payable_id)
     if row is None:
         raise not_found()
     try:
         txs = await repo.pay(
-            session, user.id, row, body.account_id, body.amount,
-            body.date or date.today(), body.category_id, body.ns, body.discount,
+            session,
+            user.id,
+            row,
+            body.account_id,
+            body.amount,
+            body.date or date.today(),
+            body.category_id,
+            body.ns,
+            body.discount,
         )
     except LookupError:
         raise not_found()

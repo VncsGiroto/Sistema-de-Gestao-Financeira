@@ -14,8 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.investments.models import Asset
 from app.modules.market import accrual as acc_mod
-from app.modules.market import bcb
-from app.modules.market import brapi
+from app.modules.market import bcb, brapi
 from app.modules.market.models import AssetPrice
 
 
@@ -27,11 +26,11 @@ class Price(BaseModel):
 
 class PriceProvider(ABC):
     @abstractmethod
-    async def quote(self, asset: Asset, ref: date) -> Price | None: ...
+    async def quote(self, asset: Asset, ref: date, session: AsyncSession | None = None) -> Price | None: ...
 
 
 class BrapiProvider(PriceProvider):
-    async def quote(self, asset: Asset, ref: date) -> Price | None:
+    async def quote(self, asset: Asset, ref: date, session: AsyncSession | None = None) -> Price | None:
         try:
             q = await brapi.get_quote(asset.ticker)
         except brapi.BrapiError:
@@ -40,20 +39,30 @@ class BrapiProvider(PriceProvider):
 
 
 class AccrualProvider(PriceProvider):
-    async def quote(self, asset: Asset, ref: date, session: AsyncSession) -> Price | None:
+    async def quote(self, asset: Asset, ref: date, session: AsyncSession | None = None) -> Price | None:
         if asset.asset_class != "RENDA_FIXA" or asset.rate_type not in ("CDI_PCT", "PREFIXADO"):
             return None
+        rate_type = asset.rate_type
+        rate = asset.rate
+        if rate is None:
+            return None
+        assert session is not None, "AccrualProvider.quote exige session"
         from app.modules.investments.models import InvestmentOp
 
         res = await session.execute(
-            select(InvestmentOp).where(InvestmentOp.asset_id == asset.id, InvestmentOp.user_id == asset.user_id)
+            select(InvestmentOp)
+            .where(InvestmentOp.asset_id == asset.id, InvestmentOp.user_id == asset.user_id)
             .order_by(InvestmentOp.date, InvestmentOp.id)
         )
         lots: list[dict] = []
         for o in res.scalars().all():
             if o.kind == "APORTE":
+                if o.quantity is None or o.price is None:
+                    return None
                 lots.append({"qty": o.quantity, "price": o.price, "date": o.date})
             elif o.kind == "RESGATE":
+                if o.quantity is None:
+                    return None
                 try:
                     lots = acc_mod.consume_fifo(lots, o.quantity)
                 except ValueError:
@@ -62,13 +71,13 @@ class AccrualProvider(PriceProvider):
             return None
         start = min(lot["date"] for lot in lots)
         cdi = {}
-        if asset.rate_type == "CDI_PCT":
+        if rate_type == "CDI_PCT":
             try:
                 cdi = await bcb.cdi_range(start, ref)
             except bcb.BcbError:
                 return None
         try:
-            value = acc_mod.accrue_lots(lots, asset.rate_type, asset.rate, ref, cdi)
+            value = acc_mod.accrue_lots(lots, rate_type, rate, ref, cdi)
         except ValueError:
             return None
         qty = sum((lot["qty"] for lot in lots), Decimal("0"))
@@ -78,10 +87,13 @@ class AccrualProvider(PriceProvider):
 
 
 class ManualProvider(PriceProvider):
-    async def quote(self, asset: Asset, ref: date, session: AsyncSession) -> Price | None:
+    async def quote(self, asset: Asset, ref: date, session: AsyncSession | None = None) -> Price | None:
+        assert session is not None, "ManualProvider.quote exige session"
         res = await session.execute(
-            select(AssetPrice).where(AssetPrice.asset_id == asset.id, AssetPrice.date <= ref)
-            .order_by(AssetPrice.date.desc()).limit(1)
+            select(AssetPrice)
+            .where(AssetPrice.asset_id == asset.id, AssetPrice.date <= ref)
+            .order_by(AssetPrice.date.desc())
+            .limit(1)
         )
         row = res.scalar_one_or_none()
         if row is None:
@@ -91,12 +103,14 @@ class ManualProvider(PriceProvider):
 
 async def _snapshot(session: AsyncSession, asset: Asset, ref: date, price: Price) -> None:
     res = await session.execute(
-        select(AssetPrice).where(AssetPrice.asset_id == asset.id, AssetPrice.date == ref,
-                                 AssetPrice.source == price.source)
+        select(AssetPrice).where(
+            AssetPrice.asset_id == asset.id, AssetPrice.date == ref, AssetPrice.source == price.source
+        )
     )
     if res.scalar_one_or_none() is None:
-        session.add(AssetPrice(user_id=asset.user_id, asset_id=asset.id, date=ref,
-                               price=price.price, source=price.source))
+        session.add(
+            AssetPrice(user_id=asset.user_id, asset_id=asset.id, date=ref, price=price.price, source=price.source)
+        )
         await session.commit()
 
 

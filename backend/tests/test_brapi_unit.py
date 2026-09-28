@@ -3,7 +3,6 @@
 import httpx
 import pytest
 
-from app.modules.market import brapi
 from app.modules.market.brapi import (
     BrapiAuthError,
     BrapiError,
@@ -59,8 +58,7 @@ async def test_401_403_429():
     with pytest.raises(BrapiForbiddenError):
         await get_quote("B3SA3", token="tok-test", client=_client(403, {"error": "x"}))
     try:
-        await get_quote("B3SA3", token="tok-test",
-                        client=_client(429, {"error": "x"}, {"Retry-After": "120"}))
+        await get_quote("B3SA3", token="tok-test", client=_client(429, {"error": "x"}, {"Retry-After": "120"}))
         raise AssertionError("deveria levantar")
     except BrapiRateLimitedError as e:
         assert e.retry_after_s == 120
@@ -72,5 +70,4 @@ async def test_500_e_sem_resultados():
     with pytest.raises(BrapiError):
         await get_quote("B3SA3", token="tok-test", client=_client(json={"results": []}))
     with pytest.raises(BrapiError):
-        await get_quote("B3SA3", token="tok-test",
-                        client=_client(json={"results": [{"symbol": "B3SA3", "data": {}}]}))
+        await get_quote("B3SA3", token="tok-test", client=_client(json={"results": [{"symbol": "B3SA3", "data": {}}]}))

@@ -71,8 +71,13 @@ async def test_commitments_agenda(cac):
 
     r = await ac.post(
         "/api/payables",
-        json={"description": "Nb", "kind": "INSTALLMENT", "total_amount": "1200.00",
-              "num_installments": 12, "first_due_date": in_h},
+        json={
+            "description": "Nb",
+            "kind": "INSTALLMENT",
+            "total_amount": "1200.00",
+            "num_installments": 12,
+            "first_due_date": in_h,
+        },
         headers=h,
     )
     assert r.status_code == 201, r.text

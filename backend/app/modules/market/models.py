@@ -1,10 +1,10 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-from decimal import Decimal
 
 
 class AssetPrice(Base):

@@ -6,7 +6,15 @@ from app.core.errors import http_error
 from app.modules.auth.deps import get_current_user
 from app.modules.investments import repository as repo
 from app.modules.investments.schemas import (
-    AssetIn, AssetOut, AssetPatch, OpIn, OpOut, PositionOut, PriceIn, PriceOut, ReturnsOut,
+    AssetIn,
+    AssetOut,
+    AssetPatch,
+    OpIn,
+    OpOut,
+    PositionOut,
+    PriceIn,
+    PriceOut,
+    ReturnsOut,
 )
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
@@ -16,21 +24,40 @@ unprocessable = lambda d: http_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unpr
 
 
 def _asset_out(r) -> AssetOut:
-    return AssetOut(id=r.id, ticker=r.ticker, name=r.name, asset_class=r.asset_class,
-                    subtype=r.subtype, custodian=r.custodian, currency=r.currency,
-                    category_id=r.category_id, rate_type=r.rate_type, rate=r.rate,
-                    maturity_date=r.maturity_date)
+    return AssetOut(
+        id=r.id,
+        ticker=r.ticker,
+        name=r.name,
+        asset_class=r.asset_class,
+        subtype=r.subtype,
+        custodian=r.custodian,
+        currency=r.currency,
+        category_id=r.category_id,
+        rate_type=r.rate_type,
+        rate=r.rate,
+        maturity_date=r.maturity_date,
+    )
 
 
 def _op_out(r) -> OpOut:
-    return OpOut(id=r.id, asset_id=r.asset_id, kind=r.kind, date=r.date, quantity=r.quantity,
-                 price=r.price, fees=r.fees, amount=r.amount, transaction_id=r.transaction_id)
+    return OpOut(
+        id=r.id,
+        asset_id=r.asset_id,
+        kind=r.kind,
+        date=r.date,
+        quantity=r.quantity,
+        price=r.price,
+        fees=r.fees,
+        amount=r.amount,
+        transaction_id=r.transaction_id,
+    )
 
 
 @router.get("", response_model=list[AssetOut])
 async def list_assets(
     asset_class: str | None = Query(default=None, pattern="^(RENDA_FIXA|RENDA_VARIAVEL|FUNDOS|CRIPTO|OUTROS)$"),
-    session: AsyncSession = Depends(get_session), user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ):
     return [_asset_out(r) for r in await repo.list_assets(session, user.id, asset_class)]
 
@@ -38,9 +65,19 @@ async def list_assets(
 @router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
 async def create_asset(body: AssetIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
     try:
-        row = await repo.create_asset(session, user.id, body.ticker, body.name, body.asset_class,
-                                      body.subtype, body.custodian, body.category_id,
-                                      body.rate_type, body.rate, body.maturity_date)
+        row = await repo.create_asset(
+            session,
+            user.id,
+            body.ticker,
+            body.name,
+            body.asset_class,
+            body.subtype,
+            body.custodian,
+            body.category_id,
+            body.rate_type,
+            body.rate,
+            body.maturity_date,
+        )
     except LookupError:
         raise not_found()
     except ValueError as e:
@@ -57,16 +94,21 @@ async def get_asset(asset_id: int, session: AsyncSession = Depends(get_session),
 
 
 @router.patch("/{asset_id}", response_model=AssetOut)
-async def patch_asset(asset_id: int, body: AssetPatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
-    from app.modules.finance.models import Category
+async def patch_asset(
+    asset_id: int, body: AssetPatch, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     from sqlalchemy import select
+
+    from app.modules.finance.models import Category
 
     row = await repo.get_asset(session, user.id, asset_id)
     if row is None:
         raise not_found()
     data = body.model_dump(exclude_unset=True)
     if "category_id" in data and data["category_id"] is not None:
-        res = await session.execute(select(Category).where(Category.id == data["category_id"], Category.user_id == user.id))
+        res = await session.execute(
+            select(Category).where(Category.id == data["category_id"], Category.user_id == user.id)
+        )
         if res.scalar_one_or_none() is None:
             raise not_found()
     rate_type = data.get("rate_type", row.rate_type)
@@ -104,11 +146,23 @@ async def list_ops(asset_id: int, session: AsyncSession = Depends(get_session), 
 
 
 @router.post("/{asset_id}/ops", response_model=OpOut, status_code=status.HTTP_201_CREATED)
-async def add_op(asset_id: int, body: OpIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def add_op(
+    asset_id: int, body: OpIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     try:
-        row = await repo.add_op(session, user.id, asset_id, body.kind, body.date,
-                                body.quantity, body.price, body.fees, body.amount,
-                                body.account_id, body.category_id)
+        row = await repo.add_op(
+            session,
+            user.id,
+            asset_id,
+            body.kind,
+            body.date,
+            body.quantity,
+            body.price,
+            body.fees,
+            body.amount,
+            body.account_id,
+            body.category_id,
+        )
     except LookupError:
         raise not_found()
     except ValueError as e:
@@ -117,7 +171,9 @@ async def add_op(asset_id: int, body: OpIn, session: AsyncSession = Depends(get_
 
 
 @router.delete("/{asset_id}/ops/{op_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_op(asset_id: int, op_id: int, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def delete_op(
+    asset_id: int, op_id: int, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     if await repo.get_asset(session, user.id, asset_id) is None:
         raise not_found()
     if not await repo.delete_op(session, user.id, asset_id, op_id):
@@ -136,20 +192,30 @@ async def get_position(asset_id: int, session: AsyncSession = Depends(get_sessio
     if row is None:
         raise not_found()
     pos = await repo.get_position(session, user.id, asset_id)
-    out = {"asset_id": asset_id, **{k: pos[k] for k in ("quantity", "average_price", "invested", "aportes", "resgates", "rendimentos")}}
+    out = {
+        "asset_id": asset_id,
+        **{k: pos[k] for k in ("quantity", "average_price", "invested", "aportes", "resgates", "rendimentos")},
+    }
     if pos["quantity"] > 0:
         q = await resolve_price(session, row, date.today())
         if q is not None:
             value = (q.price * pos["quantity"]).quantize(Decimal("0.01"))
             pnl = value + pos["resgates"] + pos["rendimentos"] - pos["aportes"]
-            out |= {"current_price": q.price, "price_source": q.source, "price_as_of": q.as_of,
-                    "current_value": value, "pnl": pnl,
-                    "profitability": (pnl / pos["aportes"]).quantize(Decimal("0.0001")) if pos["aportes"] > 0 else None}
+            out |= {
+                "current_price": q.price,
+                "price_source": q.source,
+                "price_as_of": q.as_of,
+                "current_value": value,
+                "pnl": pnl,
+                "profitability": (pnl / pos["aportes"]).quantize(Decimal("0.0001")) if pos["aportes"] > 0 else None,
+            }
     return PositionOut(**out)
 
 
 @router.post("/{asset_id}/prices", response_model=PriceOut, status_code=status.HTTP_201_CREATED)
-async def set_price(asset_id: int, body: PriceIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+async def set_price(
+    asset_id: int, body: PriceIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
     try:
         out = await repo.set_manual_price(session, user.id, asset_id, body.date, body.price)
     except LookupError:

@@ -1,16 +1,18 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-from decimal import Decimal
 
 
 class Asset(Base):
     __tablename__ = "assets"
     __table_args__ = (
-        CheckConstraint("asset_class IN ('RENDA_FIXA','RENDA_VARIAVEL','FUNDOS','CRIPTO','OUTROS')", name="ck_asset_class"),
+        CheckConstraint(
+            "asset_class IN ('RENDA_FIXA','RENDA_VARIAVEL','FUNDOS','CRIPTO','OUTROS')", name="ck_asset_class"
+        ),
         UniqueConstraint("user_id", "ticker", name="uq_assets_user_ticker"),
     )
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

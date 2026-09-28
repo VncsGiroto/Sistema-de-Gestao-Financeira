@@ -41,7 +41,11 @@ def apportion(amounts: list[Decimal], discount: Decimal) -> list[Decimal]:
         return list(amounts)
     out, acc, target = [], Decimal("0"), total - discount
     for i, a in enumerate(amounts):
-        share = target - acc if i == len(amounts) - 1 else (a * target / total).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+        share = (
+            target - acc
+            if i == len(amounts) - 1
+            else (a * target / total).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+        )
         if share <= 0:
             raise ValueError("Desconto zera uma parcela")
         acc += share

@@ -15,9 +15,7 @@ from app.modules.market.models import AssetPrice  # noqa: F401 — registra meta
 async def _owned_category(session: AsyncSession, user_id: int, category_id: int | None):
     if category_id is None:
         return None
-    res = await session.execute(
-        select(Category).where(Category.id == category_id, Category.user_id == user_id)
-    )
+    res = await session.execute(select(Category).where(Category.id == category_id, Category.user_id == user_id))
     return res.scalar_one_or_none()
 
 
@@ -34,16 +32,34 @@ async def get_asset(session: AsyncSession, user_id: int, asset_id: int) -> Asset
     return res.scalar_one_or_none()
 
 
-async def create_asset(session: AsyncSession, user_id: int, ticker: str, name: str | None,
-                       asset_class: str, subtype: str, custodian: str | None,
-                       category_id: int | None, rate_type: str | None = None,
-                       rate=None, maturity_date=None) -> Asset:
+async def create_asset(
+    session: AsyncSession,
+    user_id: int,
+    ticker: str,
+    name: str | None,
+    asset_class: str,
+    subtype: str,
+    custodian: str | None,
+    category_id: int | None,
+    rate_type: str | None = None,
+    rate=None,
+    maturity_date=None,
+) -> Asset:
     if category_id is not None and await _owned_category(session, user_id, category_id) is None:
         raise LookupError("category")
     validate_rate(asset_class, rate_type, rate)
-    row = Asset(user_id=user_id, ticker=ticker.strip().upper(), name=name, asset_class=asset_class,
-                subtype=subtype.strip().upper(), custodian=custodian, category_id=category_id,
-                rate_type=rate_type, rate=rate, maturity_date=maturity_date)
+    row = Asset(
+        user_id=user_id,
+        ticker=ticker.strip().upper(),
+        name=name,
+        asset_class=asset_class,
+        subtype=subtype.strip().upper(),
+        custodian=custodian,
+        category_id=category_id,
+        rate_type=rate_type,
+        rate=rate,
+        maturity_date=maturity_date,
+    )
     session.add(row)
     try:
         await session.commit()
@@ -64,15 +80,26 @@ async def list_ops(session: AsyncSession, user_id: int, asset_id: int) -> list[I
     if asset is None:
         raise LookupError("asset")
     res = await session.execute(
-        select(InvestmentOp).where(InvestmentOp.asset_id == asset_id, InvestmentOp.user_id == user_id)
+        select(InvestmentOp)
+        .where(InvestmentOp.asset_id == asset_id, InvestmentOp.user_id == user_id)
         .order_by(InvestmentOp.date, InvestmentOp.id)
     )
     return list(res.scalars().all())
 
 
-async def add_op(session: AsyncSession, user_id: int, asset_id: int, kind: str, on: date,
-                 quantity, price, fees: Decimal, amount, account_id: int | None = None,
-                 category_id: int | None = None) -> InvestmentOp:
+async def add_op(
+    session: AsyncSession,
+    user_id: int,
+    asset_id: int,
+    kind: str,
+    on: date,
+    quantity,
+    price,
+    fees: Decimal,
+    amount,
+    account_id: int | None = None,
+    category_id: int | None = None,
+) -> InvestmentOp:
     from app.modules.finance.models import Account, Transaction
 
     asset = await get_asset(session, user_id, asset_id)
@@ -92,27 +119,33 @@ async def add_op(session: AsyncSession, user_id: int, asset_id: int, kind: str, 
     else:  # RENDIMENTO
         if amount is None:
             raise ValueError("RENDIMENTO exige amount")
-    row = InvestmentOp(user_id=user_id, asset_id=asset_id, kind=kind, date=on,
-                       quantity=quantity, price=price, fees=fees, amount=amount)
+    row = InvestmentOp(
+        user_id=user_id, asset_id=asset_id, kind=kind, date=on, quantity=quantity, price=price, fees=fees, amount=amount
+    )
     session.add(row)
     await session.flush()
     if kind == "RENDIMENTO":
         # espelha no extrato como INCOME rastreável (simétrico ao pay de payables)
         if account_id is None:
             raise ValueError("RENDIMENTO exige account_id")
-        res = await session.execute(
-            select(Account).where(Account.id == account_id, Account.user_id == user_id))
+        res = await session.execute(select(Account).where(Account.id == account_id, Account.user_id == user_id))
         if res.scalar_one_or_none() is None:
             raise LookupError("account")
         cat = category_id if category_id is not None else asset.category_id
         if cat is not None:
-            res = await session.execute(
-                select(Category).where(Category.id == cat, Category.user_id == user_id))
+            res = await session.execute(select(Category).where(Category.id == cat, Category.user_id == user_id))
             if res.scalar_one_or_none() is None:
                 raise LookupError("category")
-        tx = Transaction(user_id=user_id, account_id=account_id, category_id=cat, date=on,
-                         description=f"Rendimento {asset.ticker}", amount=amount,
-                         type="INCOME", source="MANUAL")
+        tx = Transaction(
+            user_id=user_id,
+            account_id=account_id,
+            category_id=cat,
+            date=on,
+            description=f"Rendimento {asset.ticker}",
+            amount=amount,
+            type="INCOME",
+            source="MANUAL",
+        )
         session.add(tx)
         await session.flush()
         row.transaction_id = tx.id
@@ -125,8 +158,9 @@ async def delete_op(session: AsyncSession, user_id: int, asset_id: int, op_id: i
     from app.modules.finance.models import Transaction
 
     res = await session.execute(
-        select(InvestmentOp).where(InvestmentOp.id == op_id, InvestmentOp.asset_id == asset_id,
-                                   InvestmentOp.user_id == user_id)
+        select(InvestmentOp).where(
+            InvestmentOp.id == op_id, InvestmentOp.asset_id == asset_id, InvestmentOp.user_id == user_id
+        )
     )
     row = res.scalar_one_or_none()
     if row is None:
@@ -142,10 +176,9 @@ async def delete_op(session: AsyncSession, user_id: int, asset_id: int, op_id: i
 
 async def get_position(session: AsyncSession, user_id: int, asset_id: int) -> dict:
     ops = await list_ops(session, user_id, asset_id)
-    return calc_position([
-        {"kind": o.kind, "quantity": o.quantity, "price": o.price, "fees": o.fees, "amount": o.amount}
-        for o in ops
-    ])
+    return calc_position(
+        [{"kind": o.kind, "quantity": o.quantity, "price": o.price, "fees": o.fees, "amount": o.amount} for o in ops]
+    )
 
 
 def validate_rate(asset_class: str, rate_type: str | None, rate) -> None:
@@ -160,8 +193,7 @@ async def set_manual_price(session: AsyncSession, user_id: int, asset_id: int, o
     if asset is None:
         raise LookupError("asset")
     res = await session.execute(
-        select(AssetPrice).where(AssetPrice.asset_id == asset_id, AssetPrice.date == on,
-                                 AssetPrice.source == "MANUAL")
+        select(AssetPrice).where(AssetPrice.asset_id == asset_id, AssetPrice.date == on, AssetPrice.source == "MANUAL")
     )
     row = res.scalar_one_or_none()
     if row is None:
@@ -178,11 +210,8 @@ async def price_history(session: AsyncSession, user_id: int, asset_id: int) -> l
     asset = await get_asset(session, user_id, asset_id)
     if asset is None:
         raise LookupError("asset")
-    res = await session.execute(
-        select(AssetPrice).where(AssetPrice.asset_id == asset_id).order_by(AssetPrice.date)
-    )
-    return [{"id": r.id, "date": r.date, "price": r.price, "source": r.source}
-            for r in res.scalars().all()]
+    res = await session.execute(select(AssetPrice).where(AssetPrice.asset_id == asset_id).order_by(AssetPrice.date))
+    return [{"id": r.id, "date": r.date, "price": r.price, "source": r.source} for r in res.scalars().all()]
 
 
 async def ensure_history(session: AsyncSession, asset: Asset, start, end) -> None:
@@ -201,8 +230,15 @@ async def ensure_history(session: AsyncSession, asset: Asset, start, end) -> Non
     have = set(res.scalars().all())
     for p in pts:
         if p["date"] not in have:
-            session.add(AssetPrice(user_id=asset.user_id, asset_id=asset.id, date=p["date"],
-                                   price=Decimal(str(p["close"])), source="BRAPI"))
+            session.add(
+                AssetPrice(
+                    user_id=asset.user_id,
+                    asset_id=asset.id,
+                    date=p["date"],
+                    price=Decimal(str(p["close"])),
+                    source="BRAPI",
+                )
+            )
     await session.commit()
 
 
@@ -217,8 +253,15 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
         raise LookupError("asset")
     ops = await list_ops(session, user_id, asset_id)
     if not ops:
-        return {"start": None, "end": end, "simple": None, "xirr": None,
-                "twr": None, "twr_annualized": None, "benchmarks": {}}
+        return {
+            "start": None,
+            "end": end,
+            "simple": None,
+            "xirr": None,
+            "twr": None,
+            "twr_annualized": None,
+            "benchmarks": {},
+        }
     start = ops[0].date
     await ensure_history(session, asset, start, end)
 
@@ -258,8 +301,11 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
         amt = Decimal(o.amount)
         flow = -amt if o.kind in ("RESGATE", "RENDIMENTO") else amt
         events.append({"date": o.date, "flow": flow, "value": value_before})
-        qty += Decimal(o.quantity or 0) if o.kind == "APORTE" else (
-            -Decimal(o.quantity or 0) if o.kind == "RESGATE" else Decimal("0"))
+        qty += (
+            Decimal(o.quantity or 0)
+            if o.kind == "APORTE"
+            else (-Decimal(o.quantity or 0) if o.kind == "RESGATE" else Decimal("0"))
+        )
     twr = twr_ann = None
     if twr_ok and cur_value is not None:
         events.append({"date": end, "flow": Decimal("0"), "value": cur_value})
@@ -276,5 +322,12 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
         "ibov": await bench.ibov_return(start, end),
         "ipca": await bench.ipca_return(start, end),
     }
-    return {"start": start, "end": end, "simple": simple, "xirr": xirr,
-            "twr": twr, "twr_annualized": twr_ann, "benchmarks": benchmarks}
+    return {
+        "start": start,
+        "end": end,
+        "simple": simple,
+        "xirr": xirr,
+        "twr": twr,
+        "twr_annualized": twr_ann,
+        "benchmarks": benchmarks,
+    }

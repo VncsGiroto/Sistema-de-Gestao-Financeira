@@ -81,8 +81,7 @@ def _parse_quote(symbol: str, payload: dict) -> QuoteData:
     )
 
 
-async def get_quote(symbol: str, token: str | None = None,
-                    client: httpx.AsyncClient | None = None) -> QuoteData:
+async def get_quote(symbol: str, token: str | None = None, client: httpx.AsyncClient | None = None) -> QuoteData:
     """Busca a cotação e retorna `results[0].data` tipado."""
     tok = token or settings.brapi_token
     if not tok:

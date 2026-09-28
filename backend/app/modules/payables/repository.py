@@ -15,8 +15,9 @@ class PayableError(ValueError):
     pass
 
 
-def _validate_shape(kind: str, amount, periodicity, due_day, next_due,
-                    total_amount, num_installments, first_due_date) -> None:
+def _validate_shape(
+    kind: str, amount, periodicity, due_day, next_due, total_amount, num_installments, first_due_date
+) -> None:
     if kind in ("FIXED", "RECURRING"):
         if amount is None or periodicity is None or due_day is None:
             raise PayableError("FIXED/RECURRING exigem amount, periodicity e due_day")
@@ -73,16 +74,26 @@ def _ref_due(row: Payable, ref: date):
 
 
 async def get_one(session: AsyncSession, user_id: int, payable_id: int) -> Payable | None:
-    res = await session.execute(
-        select(Payable).where(Payable.id == payable_id, Payable.user_id == user_id)
-    )
+    res = await session.execute(select(Payable).where(Payable.id == payable_id, Payable.user_id == user_id))
     return res.scalar_one_or_none()
 
 
-async def create(session: AsyncSession, user_id: int, description: str, kind: str,
-                 amount, periodicity, due_day, next_due,
-                 total_amount, num_installments, first_due_date,
-                 account_id: int | None, category_id: int | None, ref: date) -> Payable | None:
+async def create(
+    session: AsyncSession,
+    user_id: int,
+    description: str,
+    kind: str,
+    amount,
+    periodicity,
+    due_day,
+    next_due,
+    total_amount,
+    num_installments,
+    first_due_date,
+    account_id: int | None,
+    category_id: int | None,
+    ref: date,
+) -> Payable | None:
     """Retorna None se account/category não pertencerem ao usuário."""
     _validate_shape(kind, amount, periodicity, due_day, next_due, total_amount, num_installments, first_due_date)
     if await _owned(session, Account, user_id, account_id) is None and account_id is not None:
@@ -106,11 +117,20 @@ async def create(session: AsyncSession, user_id: int, description: str, kind: st
 
         inst_amount = (total_amount / num_installments).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
     row = Payable(
-        user_id=user_id, description=description.strip(), kind=kind, amount=amount,
-        periodicity=periodicity, due_day=due_day, next_due=resolved_next,
-        total_amount=total_amount, num_installments=num_installments,
-        installment_amount=inst_amount, first_due_date=first_due_date,
-        paid_ns=[], account_id=account_id, category_id=category_id,
+        user_id=user_id,
+        description=description.strip(),
+        kind=kind,
+        amount=amount,
+        periodicity=periodicity,
+        due_day=due_day,
+        next_due=resolved_next,
+        total_amount=total_amount,
+        num_installments=num_installments,
+        installment_amount=inst_amount,
+        first_due_date=first_due_date,
+        paid_ns=[],
+        account_id=account_id,
+        category_id=category_id,
     )
     session.add(row)
     await session.commit()
@@ -126,14 +146,23 @@ async def delete(session: AsyncSession, row: Payable) -> None:
 def build_schedule(row: Payable) -> list[dict]:
     if row.kind != "INSTALLMENT":
         raise PayableError("Schedule só existe para INSTALLMENT")
+    if row.total_amount is None or row.num_installments is None or row.first_due_date is None:
+        raise PayableError("INSTALLMENT exige total_amount, num_installments e first_due_date")
     paid = set(row.paid_ns or [])
-    return [{**s, "paid": s["n"] in paid}
-            for s in schedule(row.total_amount, row.num_installments, row.first_due_date)]
+    return [{**s, "paid": s["n"] in paid} for s in schedule(row.total_amount, row.num_installments, row.first_due_date)]
 
 
-async def pay(session: AsyncSession, user_id: int, row: Payable, account_id: int,
-              amount, paid_on: date, category_id: int | None,
-              ns: list[int] | None, discount) -> list[Transaction]:
+async def pay(
+    session: AsyncSession,
+    user_id: int,
+    row: Payable,
+    account_id: int,
+    amount,
+    paid_on: date,
+    category_id: int | None,
+    ns: list[int] | None,
+    discount,
+) -> list[Transaction]:
     """Baixa a conta gerando transação(ões) source=PAYABLE. Retorna as txs criadas."""
     account = await _owned(session, Account, user_id, account_id)
     if account is None:
@@ -186,8 +215,17 @@ async def pay(session: AsyncSession, user_id: int, row: Payable, account_id: int
         except ValueError as e:
             raise PayableError(str(e))
         for s, net in zip(targets, nets):
-            txs.append(_tx(user_id, account_id, cat, paid_on,
-                            f"{row.description} ({s['n']}/{row.num_installments})", net, row.id))
+            txs.append(
+                _tx(
+                    user_id,
+                    account_id,
+                    cat,
+                    paid_on,
+                    f"{row.description} ({s['n']}/{row.num_installments})",
+                    net,
+                    row.id,
+                )
+            )
         row.paid_ns = sorted(set(row.paid_ns or []) | {s["n"] for s in targets})
     else:
         raise PayableError("kind inválido")
@@ -195,9 +233,16 @@ async def pay(session: AsyncSession, user_id: int, row: Payable, account_id: int
     for t in txs:
         session.add(t)
     await session.flush()
-    session.add(AuditLog(user_id=user_id, action="payable.pay", entity="payables", entity_id=row.id,
-                         meta={"tx_ids": [t.id for t in txs], "discount": str(discount),
-                               "ns": ns or [], "kind": row.kind}, created_at=datetime.now(UTC)))
+    session.add(
+        AuditLog(
+            user_id=user_id,
+            action="payable.pay",
+            entity="payables",
+            entity_id=row.id,
+            meta={"tx_ids": [t.id for t in txs], "discount": str(discount), "ns": ns or [], "kind": row.kind},
+            created_at=datetime.now(UTC),
+        )
+    )
     await session.commit()
     for t in txs:
         await session.refresh(t)
@@ -205,12 +250,25 @@ async def pay(session: AsyncSession, user_id: int, row: Payable, account_id: int
     return txs
 
 
-def _tx(user_id: int, account_id: int, category_id: int | None, on: date,
-        description: str, amount: Decimal, payable_id: int) -> Transaction:
+def _tx(
+    user_id: int,
+    account_id: int,
+    category_id: int | None,
+    on: date,
+    description: str,
+    amount: Decimal | None,
+    payable_id: int,
+) -> Transaction:
     if amount is None or amount <= 0:
         raise PayableError("Valor da baixa deve ser positivo")
     return Transaction(
-        user_id=user_id, account_id=account_id, category_id=category_id, date=on,
-        description=description[:500], amount=amount, type="EXPENSE",
-        source="PAYABLE", payable_id=payable_id,
+        user_id=user_id,
+        account_id=account_id,
+        category_id=category_id,
+        date=on,
+        description=description[:500],
+        amount=amount,
+        type="EXPENSE",
+        source="PAYABLE",
+        payable_id=payable_id,
     )

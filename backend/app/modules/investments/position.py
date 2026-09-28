@@ -1,7 +1,6 @@
 """Posição derivada do ledger. Puro e unit testável (opera sobre dicts)."""
 
-from decimal import Decimal, ROUND_HALF_UP
-
+from decimal import ROUND_HALF_UP, Decimal
 
 _CENT = Decimal("0.01")
 
@@ -29,7 +28,6 @@ def position(ops: list[dict]) -> dict:
     rendimentos = Decimal("0")
     for o in ops:
         q = Decimal(o.get("quantity") or 0)
-        fees = Decimal(o.get("fees") or 0)
         amt = Decimal(o["amount"])
         if o["kind"] == "APORTE":
             qty += q

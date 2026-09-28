@@ -5,9 +5,10 @@
 - Dropa `recurring_bills` e `installments`.
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 
 revision = "0009_payables"
 down_revision = "0008_installments_timestamps"
@@ -56,9 +57,7 @@ def upgrade() -> None:
             name="ck_pay_shape",
         ),
         sa.CheckConstraint("due_day IS NULL OR due_day BETWEEN 1 AND 31", name="ck_pay_due_day"),
-        sa.CheckConstraint(
-            "num_installments IS NULL OR num_installments BETWEEN 2 AND 60", name="ck_pay_num"
-        ),
+        sa.CheckConstraint("num_installments IS NULL OR num_installments BETWEEN 2 AND 60", name="ck_pay_num"),
     )
     op.create_index("ix_pay_user_next", "payables", ["user_id", "next_due"])
 
@@ -91,9 +90,7 @@ def upgrade() -> None:
     op.add_column("transactions", sa.Column("payable_id", sa.BigInteger(), nullable=True))
     op.create_foreign_key("fk_tx_payable", "transactions", "payables", ["payable_id"], ["id"], ondelete="SET NULL")
     op.drop_constraint("ck_tx_source", "transactions", type_="check")
-    op.create_check_constraint(
-        "ck_tx_source", "transactions", "source IN ('MANUAL','OFX','IMPORT','PAYABLE')"
-    )
+    op.create_check_constraint("ck_tx_source", "transactions", "source IN ('MANUAL','OFX','IMPORT','PAYABLE')")
 
     op.drop_table("installments")
     op.drop_table("recurring_bills")

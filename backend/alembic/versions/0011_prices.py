@@ -1,7 +1,8 @@
 """0011 preços: asset_prices + termos de RF em assets (Épico 7.2b)."""
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0011_prices"
 down_revision = "0010_investments"
@@ -13,9 +14,7 @@ def upgrade() -> None:
     op.add_column("assets", sa.Column("rate_type", sa.String(20), nullable=True))
     op.add_column("assets", sa.Column("rate", sa.Numeric(10, 4), nullable=True))
     op.add_column("assets", sa.Column("maturity_date", sa.Date(), nullable=True))
-    op.create_check_constraint(
-        "ck_asset_rate", "assets", "rate_type IN ('CDI_PCT','PREFIXADO','IPCA_MAIS')"
-    )
+    op.create_check_constraint("ck_asset_rate", "assets", "rate_type IN ('CDI_PCT','PREFIXADO','IPCA_MAIS')")
     op.create_table(
         "asset_prices",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),

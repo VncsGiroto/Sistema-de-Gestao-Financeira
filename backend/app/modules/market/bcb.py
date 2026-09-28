@@ -1,8 +1,9 @@
 """BCB SGS: CDI diário (série 12, sem chave). Usado no accrual de RF."""
 
-import httpx
 from datetime import date
 from decimal import Decimal, InvalidOperation
+
+import httpx
 
 
 class BcbError(Exception):
@@ -24,14 +25,14 @@ def _parse(rows: list) -> dict:
     return out
 
 
-async def cdi_range(start: date, end: date, timeout_s: int = 15,
-                    client: httpx.AsyncClient | None = None) -> dict:
+async def cdi_range(start: date, end: date, timeout_s: int = 15, client: httpx.AsyncClient | None = None) -> dict:
     """Retorna {date: taxa % a.d.} do CDI no intervalo (inclusive)."""
     return await series("12", start, end, timeout_s, client)
 
 
-async def series(code: str, start: date, end: date, timeout_s: int = 15,
-                 client: httpx.AsyncClient | None = None) -> dict:
+async def series(
+    code: str, start: date, end: date, timeout_s: int = 15, client: httpx.AsyncClient | None = None
+) -> dict:
     """Série genérica do BCB SGS {date: valor}. code ex.: '12' (CDI), '433' (IPCA mensal)."""
     if start > end:
         return {}

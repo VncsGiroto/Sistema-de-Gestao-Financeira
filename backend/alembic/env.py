@@ -13,6 +13,8 @@ import app.modules.auth.models  # noqa: F401
 import app.modules.auth.recovery_models  # noqa: F401
 import app.modules.finance.models  # noqa: F401
 import app.modules.imports.models  # noqa: F401
+import app.modules.investments.models  # noqa: F401
+import app.modules.market.models  # noqa: F401
 import app.modules.payables.models  # noqa: F401
 import app.modules.users.models  # noqa: F401
 from alembic import context

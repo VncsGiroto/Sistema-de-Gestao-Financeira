@@ -17,6 +17,7 @@ import { CategoriesPage } from "../features/finance/categories";
 import { TransactionsPage } from "../features/finance/transactions";
 import { ImportsPage } from "../features/imports/list";
 import { ReviewPage } from "../features/imports/review";
+import { InvestmentsPage } from "../features/investments/page";
 import { PayablesPage } from "../features/payables/page";
 
 function Guard({ children }: { children: React.ReactNode }) {
@@ -119,7 +120,17 @@ const payablesRoute = createRoute({
   ),
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, recoverRoute, resetRoute, appRoute, securityRoute, accountsRoute, categoriesRoute, transactionsRoute, importsRoute, reviewRoute, payablesRoute]);
+const investmentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app/investments",
+  component: () => (
+    <Guard>
+      <InvestmentsPage />
+    </Guard>
+  ),
+});
+
+const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, recoverRoute, resetRoute, appRoute, securityRoute, accountsRoute, categoriesRoute, transactionsRoute, importsRoute, reviewRoute, payablesRoute, investmentsRoute]);
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {

@@ -33,4 +33,12 @@
 - [x] 6.1 Headers, CORS, HSTS, backups PG documentados
 - [x] 6.2 E2E completo + docs finais + staging
 
+## Épico 7 — Investimentos
+- [x] 7.1 assets + ledger de operações + posição derivada (DoD: preço médio + isolamento)
+- [x] 7.2a integração brapi quote (DoD: função tipada + mock em CI)
+- [x] 7.2b motor de preços: cache, manual, accrual RF (DoD: testes de accrual)
+- [x] 7.3 rentabilidade: simples + XIRR + TWR + benchmarks (DoD: casos conhecidos)
+- [x] 7.4 rendimentos → transações INCOME (DoD: E2E parcial)
+- [x] 7.5 UI investimentos + E2E (DoD: E2E com provider mockado)
+
 Commits: Conventional Commits EN (`feat:`, `fix:`, ...). Issues em PT.

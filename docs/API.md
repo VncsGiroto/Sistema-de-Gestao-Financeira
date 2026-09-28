@@ -44,7 +44,7 @@ POST /api/imports/{id}/review {decisions:[{item_id,decision:KEEP_BOTH|DISCARD_IM
 POST /api/imports/{id}/commit → 200 {imported_rows} (só após review dos FUZZY)
 ```
 
-## 4. Payables / Dashboard
+## 4. Payables / Investimentos / Dashboard
 
 ```
 GET+POST /api/payables?kind= (+ GET /upcoming?days= · GET+PATCH+DELETE /api/payables/{id})
@@ -52,6 +52,11 @@ GET /api/payables/{id}/schedule → [{n,due_date,amount,paid}] (só INSTALLMENT;
 POST /api/payables/{id}/pay {account_id,amount?,date?,category_id?,ns?,discount?}
   → 200 {transactions[], payable} (source=PAYABLE; recorrente avança next_due;
      INSTALLMENT aceita ns múltiplos + discount rateado; 2ª baixa de ONE_TIME → 422)
+GET+POST /api/assets?asset_class= (+ GET+PATCH+DELETE /api/assets/{id})
+GET+POST /api/assets/{id}/ops (+ DELETE /ops/{op_id}) · kinds APORTE/RESGATE/RENDIMENTO
+GET /api/assets/{id}/position → {quantity,average_price,invested,aportes,resgates,rendimentos,current_*}
+GET /api/assets/{id}/prices (histórico) + POST (preço manual)
+GET /api/assets/{id}/returns → {simple,xirr,twr,twr_annualized,benchmarks{cdi,ibov,ipca}}
 GET /api/dashboard?from=&to=&account_id= → {balance, income:{total,by_category[]}, expense:{total,by_category[]}, evolution:[{month,income,expense}]}
 GET /api/dashboard/commitments?horizon_days=60 → {total, items[{kind,description,due_date,amount,ref_id}]}
 GET /api/transactions/export/csv → CSV `;` com BOM (mesmos filtros da listagem)

@@ -4,6 +4,7 @@ import { categoriesApi } from "./categories";
 import { downloadTransactionsCsv, txsApi } from "./transactions";
 import { importsApi } from "./imports";
 import { dashboardApi } from "./dashboard";
+import { assetsApi } from "./investments";
 import { payablesApi } from "./payables";
 import { healthApi } from "./health";
 import { authed, authFetch } from "./http";
@@ -21,6 +22,7 @@ export const api = {
   txs: txsApi,
   imports: importsApi,
   dashboard: dashboardApi,
+  assets: assetsApi,
   payables: payablesApi,
   authFetch,
   authed,

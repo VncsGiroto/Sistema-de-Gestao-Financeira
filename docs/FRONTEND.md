@@ -14,12 +14,12 @@
 ```
 frontend/src/
   main.tsx routes/router.tsx
-  lib/{api-client.ts, auth-store.tsx, labels.ts, money.ts}
+  lib/{api/, auth-store.tsx, labels.ts, money.ts}
   features/{auth, dashboard, finance, imports, bills, installments}/
   components/BackButton.tsx
 ```
 
-`api-client.ts`: fetch tipado + `credentials:include`, injeta `Authorization`, tenta refresh (cookie) em 401 uma vez.
+`lib/api/`: fetch tipado + `credentials:include`, injeta `Authorization`, tenta refresh (cookie) em 401 uma vez.
 `labels.ts`: enums da API em PT-BR. `money.ts`: `brl()`. Botão Voltar sempre p/ `/app` (review p/ lista).
 
 ## 3. Telas MVP

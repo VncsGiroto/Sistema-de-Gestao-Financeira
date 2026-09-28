@@ -147,6 +147,7 @@ def _tx_out(row) -> TxOut:
         amount=row.amount,
         type=row.type,
         source=row.source,
+        payable_id=row.payable_id,
     )
 
 

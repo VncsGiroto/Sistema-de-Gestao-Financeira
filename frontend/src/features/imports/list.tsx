@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAccounts } from "../finance/hooks";
-import { ApiError } from "../../lib/api-client";
+import { ApiError } from "../../lib/api";
 import { importStatusLabel, labelOf } from "../../lib/labels";
 import { useImportMutations, useImports } from "./hooks";
 import { Badge, Button, PageHeader, verdictTone } from "../../components/ui";

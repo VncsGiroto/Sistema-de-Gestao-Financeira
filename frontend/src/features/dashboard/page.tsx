@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../lib/auth-store";
-import { api } from "../../lib/api-client";
-import type { User } from "../../lib/api-client";
+import { api } from "../../lib/api";
+import type { User } from "../../lib/api";
 import { useAccounts } from "../finance/hooks";
 import { CategoryPie, EvolutionChart } from "./charts";
 import { useCommitments, useDashboard } from "./hooks";

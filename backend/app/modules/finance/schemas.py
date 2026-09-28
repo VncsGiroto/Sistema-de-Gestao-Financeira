@@ -75,6 +75,7 @@ class TxOut(BaseModel):
     amount: Decimal
     type: str
     source: str
+    payable_id: int | None = None
 
 
 class PageMeta(BaseModel):

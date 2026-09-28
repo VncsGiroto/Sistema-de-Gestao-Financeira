@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useAccountMutations, useAccounts } from "./hooks";
-import { ApiError } from "../../lib/api-client";
+import { ApiError } from "../../lib/api";
 import { Button, PageHeader } from "../../components/ui";
 import { accountTypeLabel, labelOf } from "../../lib/labels";
 

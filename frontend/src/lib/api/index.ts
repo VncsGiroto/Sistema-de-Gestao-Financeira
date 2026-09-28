@@ -6,7 +6,6 @@ export * from "./categories";
 export * from "./transactions";
 export * from "./imports";
 export * from "./dashboard";
-export * from "./bills";
-export * from "./installments";
+export * from "./payables";
 export * from "./health";
 export { api } from "./client";

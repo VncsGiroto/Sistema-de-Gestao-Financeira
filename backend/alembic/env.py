@@ -11,10 +11,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 import app.modules.auth.audit_models  # noqa: F401
 import app.modules.auth.models  # noqa: F401
 import app.modules.auth.recovery_models  # noqa: F401
-import app.modules.bills.models  # noqa: F401
 import app.modules.finance.models  # noqa: F401
 import app.modules.imports.models  # noqa: F401
-import app.modules.installments.models  # noqa: F401
+import app.modules.payables.models  # noqa: F401
 import app.modules.users.models  # noqa: F401
 from alembic import context
 from app.core.config import settings

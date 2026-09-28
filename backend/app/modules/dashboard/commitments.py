@@ -1,41 +1,44 @@
-"""Agenda unificada de compromissos futuros (somente leitura)."""
+"""Agenda unificada de compromissos futuros (somente leitura, sobre payables)."""
 
 from datetime import date
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.bills import repository as bills_repo
-from app.modules.installments import repository as inst_repo
+from app.modules.payables import repository as pay_repo
 
 
 async def get_commitments(session: AsyncSession, user_id: int, horizon_days: int = 60) -> dict:
-    limit = date.today().fromordinal(date.today().toordinal() + horizon_days)
+    from datetime import timedelta
+
+    limit = date.today() + timedelta(days=horizon_days)
     items: list[dict] = []
 
-    for b in await bills_repo.list_all(session, user_id):
-        if b.next_due and b.next_due <= limit:
+    for p in await pay_repo.list_all(session, user_id):
+        if p.kind == "INSTALLMENT":
+            for s in pay_repo.build_schedule(p):
+                if not s["paid"] and s["due_date"] <= limit:
+                    items.append(
+                        {
+                            "kind": "installment",
+                            "description": f"{p.description} ({s['n']}/{p.num_installments})",
+                            "due_date": s["due_date"],
+                            "amount": s["amount"],
+                            "ref_id": p.id,
+                        }
+                    )
+        elif p.kind == "ONE_TIME" and p.paid_at is not None:
+            continue
+        elif p.next_due and p.next_due <= limit:
             items.append(
                 {
                     "kind": "bill",
-                    "description": b.description,
-                    "due_date": b.next_due,
-                    "amount": b.amount,
-                    "ref_id": b.id,
+                    "description": p.description,
+                    "due_date": p.next_due,
+                    "amount": p.amount,
+                    "ref_id": p.id,
                 }
             )
-    for inst in await inst_repo.list_all(session, user_id):
-        for p in inst_repo.build_schedule(inst):
-            if p["due_date"] <= limit:
-                items.append(
-                    {
-                        "kind": "installment",
-                        "description": f"{inst.description} ({p['n']}/{inst.num_installments})",
-                        "due_date": p["due_date"],
-                        "amount": p["amount"],
-                        "ref_id": inst.id,
-                    }
-                )
     items.sort(key=lambda i: (i["due_date"], i["description"]))
     total = sum((i["amount"] for i in items), Decimal("0"))
     return {"total": total, "items": items}

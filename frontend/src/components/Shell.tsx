@@ -7,8 +7,7 @@ const ITEMS = [
   { to: "/app/categories", label: "Categorias", icon: "🏷" },
   { to: "/app/transactions", label: "Movimentações", icon: "⇄" },
   { to: "/app/imports", label: "Importações", icon: "📥" },
-  { to: "/app/bills", label: "Contas futuras", icon: "🗓" },
-  { to: "/app/installments", label: "Parcelamentos", icon: "🧾" },
+  { to: "/app/payables", label: "Contas a pagar", icon: "🗓" },
 ] as const;
 
 export function Shell({ children }: { children: React.ReactNode }) {

@@ -1,4 +1,4 @@
-"""Regras de vencimento de contas futuras. Puro e unit testável."""
+"""Regras de vencimento de contas a pagar. Puro e unit testável."""
 
 import calendar
 from datetime import date, timedelta

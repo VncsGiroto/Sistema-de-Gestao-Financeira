@@ -4,13 +4,12 @@ import { categoriesApi } from "./categories";
 import { downloadTransactionsCsv, txsApi } from "./transactions";
 import { importsApi } from "./imports";
 import { dashboardApi } from "./dashboard";
-import { billsApi } from "./bills";
-import { installmentsApi } from "./installments";
+import { payablesApi } from "./payables";
 import { healthApi } from "./health";
 import { authed, authFetch } from "./http";
 
 /**
- * Facade com a mesma assinatura do antigo `api-client.ts`
+ * Facade com a mesma assinatura do antigo `api.ts`
  * para migração incremental. Código novo pode importar
  * os módulos (`./auth`, `./accounts`, ...) diretamente.
  */
@@ -22,8 +21,7 @@ export const api = {
   txs: txsApi,
   imports: importsApi,
   dashboard: dashboardApi,
-  bills: billsApi,
-  installments: installmentsApi,
+  payables: payablesApi,
   authFetch,
   authed,
   downloadCsv: downloadTransactionsCsv,

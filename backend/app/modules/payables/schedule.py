@@ -29,3 +29,21 @@ def schedule(total: Decimal, n: int, first_due: date) -> list[dict]:
         acc += amount
         out.append({"n": i, "due_date": _add_months(first_due, i - 1), "amount": amount})
     return out
+
+
+def apportion(amounts: list[Decimal], discount: Decimal) -> list[Decimal]:
+    """Rateia `discount` proporcionalmente aos valores (trunca no centavo,
+    resto na última). Soma do retorno == soma(amounts) - discount."""
+    total = sum(amounts, Decimal("0"))
+    if discount < 0 or discount >= total:
+        raise ValueError("Desconto deve estar entre 0 (inclusive) e o total (exclusive)")
+    if discount == 0:
+        return list(amounts)
+    out, acc, target = [], Decimal("0"), total - discount
+    for i, a in enumerate(amounts):
+        share = target - acc if i == len(amounts) - 1 else (a * target / total).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+        if share <= 0:
+            raise ValueError("Desconto zera uma parcela")
+        acc += share
+        out.append(share)
+    return out

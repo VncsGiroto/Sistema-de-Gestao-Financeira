@@ -18,6 +18,14 @@ export const billKindLabel: Record<string, string> = {
   VARIABLE: "Variável",
   ONE_TIME: "Única",
   RECURRING: "Recorrente",
+  INSTALLMENT: "Parcelada",
+};
+
+export const payableKindLabel: Record<string, string> = {
+  FIXED: "Fixa",
+  RECURRING: "Recorrente",
+  INSTALLMENT: "Parcelada",
+  ONE_TIME: "Única",
 };
 
 export const periodicityLabel: Record<string, string> = {

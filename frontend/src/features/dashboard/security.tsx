@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../../lib/auth-store";
-import { ApiError, api } from "../../lib/api-client";
+import { ApiError, api } from "../../lib/api";
 import { Button, PageHeader } from "../../components/ui";
 
 export function SecurityPage() {

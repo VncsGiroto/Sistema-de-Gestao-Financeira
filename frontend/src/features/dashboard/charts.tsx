@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
-import type { DashboardData } from "../../lib/api-client";
+import type { DashboardData } from "../../lib/api";
 
 const FONT = "Inter, system-ui, sans-serif";
 const GREEN = "#059669";

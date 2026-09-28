@@ -78,7 +78,7 @@ async def test_dashboard_massa_conhecida(dash):
 
     assert D(d["income"]["total"]) == Decimal("9500")
     assert D(d["expense"]["total"]) == Decimal("2000")
-    assert D(d["balance"]) == Decimal("8500")  # 1000 + 9500 - 2000
+    assert D(d["balance"]) == Decimal("6500")  # cumulativo: 1000 + 9500 - 4000 (inclui ALUGUEL ANT de ago)
     assert {c["name"]: D(c["total"]) for c in d["income"]["by_category"]} == {
         "Salário": Decimal("8000"),
         "Sem categoria": Decimal("1500"),

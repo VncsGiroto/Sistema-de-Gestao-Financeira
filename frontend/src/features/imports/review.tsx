@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "../../lib/auth-store";
-import { api } from "../../lib/api-client";
-import type { ImportItem, Tx } from "../../lib/api-client";
-import { ApiError } from "../../lib/api-client";
+import { api } from "../../lib/api";
+import type { ImportItem, Tx } from "../../lib/api";
+import { ApiError } from "../../lib/api";
 import { useImport, useImportItems, useImportMutations } from "./hooks";
 import { Badge, Button, PageHeader, verdictTone } from "../../components/ui";
 import { importStatusLabel, labelOf, txTypeLabel, verdictLabel } from "../../lib/labels";

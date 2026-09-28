@@ -23,6 +23,7 @@
 ## Épico 4 — Futuro e parcelas
 - [x] 4.1 recurring_bills CRUD + próximas vencidas (DoD: cálculo next_due)
 - [x] 4.2 installments + schedule com arredondamento (DoD: soma parcelas == total)
+- [x] 4.3 payables: une bills+installments em contas a pagar + baixa com lançamento + antecipação com desconto (DoD: E2E payables)
 
 ## Épico 5 — Dashboard
 - [x] 5.1 `GET /dashboard` agregações (DoD: teste com massa conhecida)

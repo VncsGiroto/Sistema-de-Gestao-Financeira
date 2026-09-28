@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api-client";
-import type { ImportJob, ImportItem } from "../../lib/api-client";
+import { api } from "../../lib/api";
+import type { ImportJob, ImportItem } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 
 export function useImports() {

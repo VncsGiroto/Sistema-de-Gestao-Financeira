@@ -52,7 +52,7 @@ class Transaction(Base, TimestampMixin):
     __tablename__ = "transactions"
     __table_args__ = (
         CheckConstraint("type IN ('INCOME','EXPENSE')", name="ck_tx_type"),
-        CheckConstraint("source IN ('MANUAL','OFX','IMPORT')", name="ck_tx_source"),
+        CheckConstraint("source IN ('MANUAL','OFX','IMPORT','PAYABLE')", name="ck_tx_source"),
         CheckConstraint("amount <> 0", name="ck_tx_amount"),
         UniqueConstraint("user_id", "source", "external_id", name="uq_tx_user_source_external"),
     )
@@ -70,3 +70,6 @@ class Transaction(Base, TimestampMixin):
     import_id: Mapped[int | None] = mapped_column(
         ForeignKey("imports.id", ondelete="SET NULL"), nullable=True
     )  # Épico 3
+    payable_id: Mapped[int | None] = mapped_column(
+        ForeignKey("payables.id", ondelete="SET NULL"), nullable=True
+    )  # baixa de contas a pagar

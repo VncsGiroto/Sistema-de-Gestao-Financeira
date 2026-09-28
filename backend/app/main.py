@@ -3,13 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.modules.auth.router import router as auth_router
-from app.modules.bills.router import router as bills_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.finance.router import accounts as accounts_router
 from app.modules.finance.router import categories as categories_router
 from app.modules.finance.router import transactions as transactions_router
 from app.modules.imports.router import router as imports_router
-from app.modules.installments.router import router as installments_router
+from app.modules.payables.router import router as payables_router
 
 app = FastAPI(title=settings.app_name, docs_url="/api/docs", redoc_url="/api/redoc")
 
@@ -26,9 +25,8 @@ app.include_router(accounts_router)
 app.include_router(categories_router)
 app.include_router(transactions_router)
 app.include_router(imports_router)
-app.include_router(bills_router)
+app.include_router(payables_router)
 app.include_router(dashboard_router)
-app.include_router(installments_router)
 
 
 @app.get("/api/health")
@@ -38,4 +36,4 @@ def health() -> dict:
 
 @app.get("/api/version")
 def version() -> dict:
-    return {"version": "0.1.0-mvp-etapa1"}
+    return {"version": "0.2.0-mvp"}

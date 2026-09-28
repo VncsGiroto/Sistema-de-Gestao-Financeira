@@ -88,29 +88,30 @@ CREATE TABLE import_items (
   decided_at TIMESTAMPTZ
 );
 
-CREATE TABLE recurring_bills (
+CREATE TABLE payables (   -- migration 0009: une recurring_bills + installments
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   description VARCHAR(200) NOT NULL,
-  amount NUMERIC(14,2) NOT NULL,
-  kind VARCHAR(20) NOT NULL CHECK (kind IN ('FIXED','VARIABLE','ONE_TIME','RECURRING')),
-  periodicity VARCHAR(10) CHECK (periodicity IN ('MONTHLY','WEEKLY','YEARLY')),
-  due_day INT CHECK (due_day BETWEEN 1 AND 31),
-  next_due DATE
+  kind VARCHAR(20) NOT NULL CHECK (kind IN ('FIXED','RECURRING','INSTALLMENT','ONE_TIME')),
+  amount NUMERIC(14,2),                    -- FIXED/RECURRING (fixo) / ONE_TIME
+  periodicity VARCHAR(10),                 -- FIXED/RECURRING
+  due_day INT,
+  next_due DATE,                           -- FIXED/RECURRING (calculado) / ONE_TIME (informado)
+  total_amount NUMERIC(14,2),              -- INSTALLMENT
+  num_installments INT,
+  installment_amount NUMERIC(14,2),        -- referência (truncada); exato via schedule
+  first_due_date DATE,                     -- INSTALLMENT
+  paid_ns JSONB NOT NULL DEFAULT '[]',     -- INSTALLMENT: nºs pagos
+  paid_at TIMESTAMPTZ,                     -- ONE_TIME quitada
+  account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL,    -- INSTALLMENT/default da baixa
+  category_id BIGINT REFERENCES categories(id) ON DELETE SET NULL, -- default da baixa
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- + ck_pay_shape (colunas obrigatórias por kind), ck_pay_due_day, ck_pay_num
 );
 
-CREATE TABLE installments (
-  id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  description VARCHAR(200) NOT NULL,
-  total_amount NUMERIC(14,2) NOT NULL,
-  num_installments INT NOT NULL CHECK (num_installments BETWEEN 2 AND 60),
-  installment_amount NUMERIC(14,2) NOT NULL,
-  first_due_date DATE NOT NULL,
-  account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),   -- migration 0008 (model já tinha)
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- transactions.payable_id BIGINT REFERENCES payables(id) ON DELETE SET NULL
+-- transactions.source += 'PAYABLE' (baixas geram lançamentos rastreáveis)
 
 CREATE TABLE refresh_tokens (
   id BIGSERIAL PRIMARY KEY,
@@ -136,11 +137,11 @@ CREATE TABLE audit_logs (
 
 ## 3. ER (resumo)
 
-`users 1—N accounts, categories, transactions, imports, bills, installments, refresh_tokens, audit_logs · accounts 1—N transactions · imports 1—N import_items`.
+`users 1—N accounts, categories, transactions, imports, payables, refresh_tokens, audit_logs · accounts 1—N transactions · imports 1—N import_items · payables 1—N transactions (via payable_id)`.
 
 ## 4. Migrations
 
-Cadeia validada em banco fresco: `0001_auth_core → 0002_password_resets → 0003_accounts_categories → 0004_transactions → 0005_imports → 0006_recurring_bills → 0007_installments → 0008_installments_timestamps` (drift model×banco = zero).
+Cadeia validada em banco fresco: `0001_auth_core → 0002_password_resets → 0003_accounts_categories → 0004_transactions → 0005_imports → 0006_recurring_bills → 0007_installments → 0008_installments_timestamps → 0009_payables` (0009 migra bills/installments e dropa as tabelas; drift model×banco = zero).
 
 Tabelas auxiliares: `password_resets` (recovery 1h, uso único) e `audit_logs(action,entity,entity_id,meta)`.
 

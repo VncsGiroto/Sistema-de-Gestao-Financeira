@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api-client";
-import type { Account, Category, TxFilters, TxPage } from "../../lib/api-client";
+import { api } from "../../lib/api";
+import type { Account, Category, TxFilters, TxPage } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 
 const STALE = 30_000;

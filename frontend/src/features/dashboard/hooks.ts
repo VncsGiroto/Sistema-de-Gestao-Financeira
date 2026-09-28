@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api-client";
-import type { CommitmentsData, DashboardData } from "../../lib/api-client";
+import { api } from "../../lib/api";
+import type { CommitmentsData, DashboardData } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 
 export interface DashboardFilters {

@@ -17,8 +17,7 @@ import { CategoriesPage } from "../features/finance/categories";
 import { TransactionsPage } from "../features/finance/transactions";
 import { ImportsPage } from "../features/imports/list";
 import { ReviewPage } from "../features/imports/review";
-import { BillsPage } from "../features/bills/page";
-import { InstallmentsPage } from "../features/installments/page";
+import { PayablesPage } from "../features/payables/page";
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { access, ready, refresh } = useAuth();
@@ -110,26 +109,17 @@ const reviewRoute = createRoute({
     );
   },
 });
-const billsRoute = createRoute({
+const payablesRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/app/bills",
+  path: "/app/payables",
   component: () => (
     <Guard>
-      <BillsPage />
-    </Guard>
-  ),
-});
-const installmentsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/app/installments",
-  component: () => (
-    <Guard>
-      <InstallmentsPage />
+      <PayablesPage />
     </Guard>
   ),
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, recoverRoute, resetRoute, appRoute, securityRoute, accountsRoute, categoriesRoute, transactionsRoute, importsRoute, reviewRoute, billsRoute, installmentsRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, recoverRoute, resetRoute, appRoute, securityRoute, accountsRoute, categoriesRoute, transactionsRoute, importsRoute, reviewRoute, payablesRoute]);
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {

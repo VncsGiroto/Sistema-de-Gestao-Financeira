@@ -64,6 +64,22 @@ async def get_dashboard(
         tx_q = tx_q.where(Transaction.account_id == account_id)
     txs = list((await session.execute(tx_q)).scalars().all())
 
+    # Saldo cumulativo até `end` (todos os lançamentos, sem corte de janela):
+    # evita que movimentações antigas "sumam" do saldo. Só income/expense/
+    # evolution respeitam a janela.
+    cum_q = select(Transaction.type, Transaction.amount).where(
+        Transaction.user_id == user_id,
+        Transaction.date <= end,
+    )
+    if account_id:
+        cum_q = cum_q.where(Transaction.account_id == account_id)
+    cum_income = cum_expense = Decimal("0")
+    for ttype, amount in (await session.execute(cum_q)).all():
+        if ttype == "INCOME":
+            cum_income += abs(amount)
+        else:
+            cum_expense += abs(amount)
+
     cats = {
         c.id: c.name
         for c in (await session.execute(select(Category).where(Category.user_id == user_id))).scalars().all()
@@ -90,7 +106,7 @@ async def get_dashboard(
             evo.setdefault(m, {"income": Decimal("0"), "expense": Decimal("0")})["expense"] += v
 
     return {
-        "balance": initial + income - expense,
+        "balance": initial + cum_income - cum_expense,
         "income": {"total": income, "by_category": [{"name": k, "total": v} for k, v in sorted(by_inc.items())]},
         "expense": {"total": expense, "by_category": [{"name": k, "total": v} for k, v in sorted(by_exp.items())]},
         "evolution": [{"month": m, "income": evo[m]["income"], "expense": evo[m]["expense"]} for m in sorted(evo)],

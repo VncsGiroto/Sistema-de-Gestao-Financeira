@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { api } from "../../lib/api-client";
-import type { TxFilters } from "../../lib/api-client";
-import { ApiError } from "../../lib/api-client";
+import { api } from "../../lib/api";
+import type { TxFilters } from "../../lib/api";
+import { ApiError } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 import { useAccounts, useCategories, useTxMutations, useTxs } from "./hooks";
 import { Button, PageHeader } from "../../components/ui";

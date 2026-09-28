@@ -62,7 +62,7 @@ async def register(body: RegisterIn, session: AsyncSession = Depends(get_session
 
 @router.post("/login", response_model=TokenPair)
 async def login(body: LoginIn, request: Request, response: Response, session: AsyncSession = Depends(get_session)):
-    await rate_limit(request, "login", 10)
+    await rate_limit(request, "login", settings.login_rate_limit)
     try:
         _, access, refresh, ttl = await service.login(session, str(body.email), body.password)
     except ValueError as e:

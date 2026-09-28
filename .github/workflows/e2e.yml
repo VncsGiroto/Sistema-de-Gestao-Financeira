@@ -11,6 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
       - run: docker compose up -d --build
+        env: { LOGIN_RATE_LIMIT: "60" }
       - run: |
           for i in $(seq 1 30); do
             curl -sf http://localhost:8080/api/health && break
@@ -19,6 +20,8 @@ jobs:
           curl -sf http://localhost:8080/api/health
       - uses: actions/setup-node@v4
         with: {node-version: 22}
+      - run: npm ci
+        working-directory: frontend
       - run: npx playwright install --with-deps
         working-directory: frontend
       - run: npx playwright test

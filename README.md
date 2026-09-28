@@ -1,6 +1,6 @@
 # FinanceWay — Gestão Financeira Pessoal (MVP)
 
-Centralize contas, importe OFX (com deduplicação revisada), categorize, acompanhe contas futuras/parcelas e veja o painel com agenda de compromissos.
+Centralize contas, importe OFX (com deduplicação revisada), categorize, pague contas (fixas, recorrentes, parceladas, únicas — com baixa em movimentações e antecipação com desconto), invista (ledger de operações, preços automáticos, XIRR/TWR/benchmarks) e veja o painel com agenda de compromissos.
 
 **Stack:** Python 3.13 + FastAPI · React 19 + Vite 6 + TS 5.6 · PostgreSQL 16 · Redis 7 · Nginx 1.27 · Docker Compose · GitHub Actions.
 
@@ -16,7 +16,7 @@ docker compose up -d --build
 # Swagger: http://localhost:8080/api/docs
 ```
 
-Fluxo inicial: registre-se → crie uma conta → lance ou importe um `.ofx` → revise em Importações → confirme → veja o Painel.
+Fluxo inicial: registre-se → crie uma conta → lance, importe um `.ofx` ou cadastre um ativo → revise em Importações → baixe contas em Contas a pagar → veja o Painel e Investimentos.
 
 ## Comandos
 
@@ -44,6 +44,11 @@ docker compose down              # para (mantém dados); down -v APAGA o banco
 | `ENV` | dev | `prod` = Redis fail-closed + cookie Secure |
 | `CORS_ORIGINS` | localhost:8080,5173 | csv |
 | `COOKIE_SECURE` | false | `true` atrás de HTTPS |
+| `BRAPI_TOKEN` | — | chave brapi.dev (só servidor); sem ela, preços de mercado dão fail-open |
+
+## Investimentos (Épico 7)
+
+Livro de operações (`APORTE/RESGATE/RENDIMENTO`) por ativo, posição derivada (preço médio), preços automáticos (brapi p/ mercado, accrual CDI/prefixado p/ RF, manual), rentabilidade (simples, XIRR, TWR, benchmarks CDI/Ibovespa/IPCA) e rendimentos espelhados no extrato como `INCOME`. IR fora do escopo (valores brutos).
 
 ## Troubleshooting
 
@@ -57,15 +62,15 @@ docker compose down              # para (mantém dados); down -v APAGA o banco
 ## Estrutura
 
 ```
-backend/ (FastAPI: auth, users, finance, imports, bills, installments, dashboard)
-frontend/ (React SPA: auth, finance, imports, bills, installments, dashboard+commitments)
+backend/ (FastAPI: auth, users, finance, imports, payables, investments, market, dashboard)
+frontend/ (React SPA: auth, finance, imports, payables, investments, dashboard+commitments)
 infrastructure/nginx/  scripts/backup.sh  docs/  .github/workflows/
 ```
 
 ## Docs
 
-`SPEC-MVP.md` (escopo/stack) · `ARCHITECTURE.md` · `DATABASE.md` (DDL, cadeia 0001→0008) · `API.md` · `SECURITY.md` · `OFX-IMPORT.md` · `DEDUP.md` · `FRONTEND.md` · `TESTING.md` · `DEPLOY.md` (staging) · `BACKLOG.md`.
+`SPEC-MVP.md` (escopo/stack) · `ARCHITECTURE.md` · `DATABASE.md` (DDL, cadeia 0001→0011) · `API.md` · `SECURITY.md` · `OFX-IMPORT.md` · `DEDUP.md` · `FRONTEND.md` · `TESTING.md` · `DEPLOY.md` (staging) · `BACKLOG.md`.
 
 ## Roadmap
 
-MVP entregue (Épicos 0–6). Pós-MVP: Pluggy/Belvo, Open Finance, holerites, investimentos, app nativo, categorização inteligente.
+MVP entregue (Épicos 0–7, incluindo investimentos). Pós-MVP: Pluggy/Belvo, Open Finance, holerites, IR sobre investimentos, app nativo, categorização inteligente.

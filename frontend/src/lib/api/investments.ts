@@ -73,7 +73,7 @@ export interface Returns {
   xirr: string | null;
   twr: string | null;
   twr_annualized: string | null;
-  benchmarks: { cdi: string | null; ibov: string | null; ipca: string | null };
+  benchmarks: { cdi: string | null; ipca: string | null };
 }
 
 export const assetsApi = {

@@ -214,34 +214,6 @@ async def price_history(session: AsyncSession, user_id: int, asset_id: int) -> l
     return [{"id": r.id, "date": r.date, "price": r.price, "source": r.source} for r in res.scalars().all()]
 
 
-async def ensure_history(session: AsyncSession, asset: Asset, start, end) -> None:
-    """Backfill de asset_prices via brapi p/ classes de mercado (TWR precisa de série)."""
-    from app.modules.market import history as hist_mod
-
-    if asset.asset_class not in ("RENDA_VARIAVEL", "FUNDOS", "CRIPTO") and not (
-        asset.asset_class == "RENDA_FIXA" and asset.subtype == "TESOURO"
-    ):
-        return
-    try:
-        pts = await hist_mod.history(asset.ticker, start, end)
-    except Exception:
-        return
-    res = await session.execute(select(AssetPrice.date).where(AssetPrice.asset_id == asset.id))
-    have = set(res.scalars().all())
-    for p in pts:
-        if p["date"] not in have:
-            session.add(
-                AssetPrice(
-                    user_id=asset.user_id,
-                    asset_id=asset.id,
-                    date=p["date"],
-                    price=Decimal(str(p["close"])),
-                    source="BRAPI",
-                )
-            )
-    await session.commit()
-
-
 async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -> dict:
     """Simples + XIRR + TWR + benchmarks. Sem preço => métricas temporais None."""
     from app.modules.investments import returns as ret
@@ -263,7 +235,6 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
             "benchmarks": {},
         }
     start = ops[0].date
-    await ensure_history(session, asset, start, end)
 
     prices = await price_history(session, user_id, asset_id)
     hist = sorted(((p["date"], Decimal(p["price"])) for p in prices), key=lambda x: x[0])
@@ -319,7 +290,6 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
 
     benchmarks = {
         "cdi": await bench.cdi_return(start, end),
-        "ibov": await bench.ibov_return(start, end),
         "ipca": await bench.ipca_return(start, end),
     }
     return {

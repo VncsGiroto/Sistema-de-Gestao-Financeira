@@ -14,10 +14,6 @@ class Settings(BaseSettings):
     ofx_dir: str = "/data/ofx"
     ofx_max_bytes: int = 10 * 1024 * 1024
     dedup_window_days: int = 2
-    # mercado (7.2a): token só no servidor, nunca no front/repo
-    brapi_token: str = ""
-    brapi_base_url: str = "https://brapi.dev/api"
-    brapi_timeout_s: int = 10
     # hardening (6.1)
     env: str = "dev"  # dev | prod (prod = fail-closed no Redis + cookie Secure)
     login_rate_limit: int = 10  # anti-bruteforce no login (req/min/IP); E2E/CI eleva via env

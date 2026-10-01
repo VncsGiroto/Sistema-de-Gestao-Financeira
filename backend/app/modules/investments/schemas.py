@@ -73,7 +73,7 @@ class PositionOut(BaseModel):
     resgates: Decimal
     rendimentos: Decimal
     current_price: Decimal | None = None
-    price_source: str | None = None  # BRAPI | ACCRUAL | MANUAL
+    price_source: str | None = None  # ACCRUAL | MANUAL
     price_as_of: date_t | None = None
     current_value: Decimal | None = None
     pnl: Decimal | None = None
@@ -94,7 +94,6 @@ class PriceOut(BaseModel):
 
 class BenchmarksOut(BaseModel):
     cdi: Decimal | None = None
-    ibov: Decimal | None = None
     ipca: Decimal | None = None
 
 

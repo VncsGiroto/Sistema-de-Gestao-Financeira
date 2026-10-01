@@ -35,7 +35,7 @@
 
 ## Épico 7 — Investimentos
 - [x] 7.1 assets + ledger de operações + posição derivada (DoD: preço médio + isolamento)
-- [x] 7.2a integração brapi quote (DoD: função tipada + mock em CI)
+- [x] 7.2a integração brapi quote (removida: preços via accrual/manual; ver 7.2b)
 - [x] 7.2b motor de preços: cache, manual, accrual RF (DoD: testes de accrual)
 - [x] 7.3 rentabilidade: simples + XIRR + TWR + benchmarks (DoD: casos conhecidos)
 - [x] 7.4 rendimentos → transações INCOME (DoD: E2E parcial)

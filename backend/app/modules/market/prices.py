@@ -1,7 +1,7 @@
-"""Orquestra preço atual: BRAPI (mercado) → ACCRUAL (RF contratada) → MANUAL.
+"""Orquestra preço atual: ACCRUAL (RF contratada) → MANUAL.
 
-Persiste snapshot diário em asset_prices (BRAPI/ACCRUAL) e usa Redis como
-cache de 1h (fail-open). Preço staleness é sinalizado via `as_of`.
+Persiste snapshot diário em asset_prices (ACCRUAL). Preço staleness é
+sinalizado via `as_of`.
 """
 
 from abc import ABC, abstractmethod
@@ -14,28 +14,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.investments.models import Asset
 from app.modules.market import accrual as acc_mod
-from app.modules.market import bcb, brapi
+from app.modules.market import bcb
 from app.modules.market.models import AssetPrice
 
 
 class Price(BaseModel):
     price: Decimal
-    source: str  # BRAPI | ACCRUAL | MANUAL
+    source: str  # ACCRUAL | MANUAL
     as_of: date
 
 
 class PriceProvider(ABC):
     @abstractmethod
     async def quote(self, asset: Asset, ref: date, session: AsyncSession | None = None) -> Price | None: ...
-
-
-class BrapiProvider(PriceProvider):
-    async def quote(self, asset: Asset, ref: date, session: AsyncSession | None = None) -> Price | None:
-        try:
-            q = await brapi.get_quote(asset.ticker)
-        except brapi.BrapiError:
-            return None
-        return Price(price=Decimal(str(q.price)), source="BRAPI", as_of=ref)
 
 
 class AccrualProvider(PriceProvider):
@@ -115,28 +106,7 @@ async def _snapshot(session: AsyncSession, asset: Asset, ref: date, price: Price
 
 
 async def resolve_price(session: AsyncSession, asset: Asset, ref: date) -> Price | None:
-    """BRAPI → ACCRUAL → MANUAL. Cache Redis 1h p/ BRAPI (fail-open)."""
-    from app.core.redis_client import get_redis
-
-    if asset.asset_class in ("RENDA_VARIAVEL", "FUNDOS", "CRIPTO") or (
-        asset.asset_class == "RENDA_FIXA" and asset.subtype == "TESOURO"
-    ):
-        key = f"quote:{asset.ticker}:{ref.isoformat()}"
-        try:
-            redis = get_redis()
-            cached = await redis.get(key)
-            if cached:
-                return Price(price=Decimal(cached), source="BRAPI", as_of=ref)
-        except Exception:
-            pass
-        q = await BrapiProvider().quote(asset, ref)
-        if q is not None:
-            try:
-                await get_redis().setex(key, 3600, str(q.price))
-            except Exception:
-                pass
-            await _snapshot(session, asset, ref, q)
-            return q
+    """ACCRUAL → MANUAL (fail-open: sem preço, retorna None)."""
     if asset.asset_class == "RENDA_FIXA" and asset.rate_type in ("CDI_PCT", "PREFIXADO"):
         q = await AccrualProvider().quote(asset, ref, session)
         if q is not None:

@@ -167,19 +167,8 @@ async def test_manual_price_enriquece_position(iac):
     r = await ac.get(f"/api/assets/{aid}/prices", headers=h)
     assert len(r.json()) == 1 and r.json()[0]["source"] == "MANUAL"
 
-    # position usa o preço manual mais recente <= hoje
-    from app.modules.market import prices as prices_mod
-
-    real = prices_mod.BrapiProvider.quote
-
-    async def no_brapi(self, asset, ref):
-        return None
-
-    prices_mod.BrapiProvider.quote = no_brapi
-    try:
-        r = await ac.get(f"/api/assets/{aid}/position", headers=h)
-    finally:
-        prices_mod.BrapiProvider.quote = real
+    # position usa o preço manual mais recente <= hoje (sem brapi: MANUAL direto)
+    r = await ac.get(f"/api/assets/{aid}/position", headers=h)
     p = r.json()
     assert p["current_price"] == "50.00000000" and p["price_source"] == "MANUAL"
     assert p["current_value"] == "500.00" and p["pnl"] == "100.00" and p["profitability"] == "0.2500"
@@ -261,14 +250,10 @@ async def test_returns_com_benchmarks_mockados(iac, monkeypatch):
     async def fake_cdi(s, e):
         return Decimal("0.05")
 
-    async def fake_ibov(s, e):
-        return Decimal("0.10")
-
     async def fake_ipca(s, e):
         return Decimal("0.02")
 
     monkeypatch.setattr(bench, "cdi_return", fake_cdi)
-    monkeypatch.setattr(bench, "ibov_return", fake_ibov)
     monkeypatch.setattr(bench, "ipca_return", fake_ipca)
 
     ac, h = iac, await _user(iac, "rt")
@@ -293,7 +278,7 @@ async def test_returns_com_benchmarks_mockados(iac, monkeypatch):
     assert Decimal(str(d["simple"])) == Decimal("0.25")
     assert d["xirr"] is not None and Decimal(str(d["xirr"])) > 0
     assert d["twr"] is not None and d["twr_annualized"] is not None
-    assert d["benchmarks"] == {"cdi": "0.05", "ibov": "0.10", "ipca": "0.02"}
+    assert d["benchmarks"] == {"cdi": "0.05", "ipca": "0.02"}
 
     # sem operações: tudo nulo, sem quebrar
     r = await ac.post("/api/assets", json={"ticker": "VAZ7", "asset_class": "OUTROS", "subtype": "OUTRO"}, headers=h)

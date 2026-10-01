@@ -143,7 +143,7 @@ CREATE TABLE audit_logs (
 
 Cadeia validada em banco fresco: `0001_auth_core → 0002_password_resets → 0003_accounts_categories → 0004_transactions → 0005_imports → 0006_recurring_bills → 0007_installments → 0008_installments_timestamps → 0009_payables → 0010_investments → 0011_prices` (0009 migra bills/installments e dropa as tabelas; drift model×banco = zero).
 
-Tabelas auxiliares: `password_resets` (recovery 1h, uso único) e `audit_logs(action,entity,entity_id,meta)`; `asset_prices(asset_id,date,price,source)` guarda histórico MANUAL/BRAPI/ACCRUAL (base do TWR).
+Tabelas auxiliares: `password_resets` (recovery 1h, uso único) e `audit_logs(action,entity,entity_id,meta)`; `asset_prices(asset_id,date,price,source)` guarda histórico MANUAL/ACCRUAL (base do TWR).
 
 Tabelas auxiliares: `password_resets` (recovery 1h, uso único) e `audit_logs(action,entity,entity_id,meta)`.
 

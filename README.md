@@ -44,11 +44,10 @@ docker compose down              # para (mantém dados); down -v APAGA o banco
 | `ENV` | dev | `prod` = Redis fail-closed + cookie Secure |
 | `CORS_ORIGINS` | localhost:8080,5173 | csv |
 | `COOKIE_SECURE` | false | `true` atrás de HTTPS |
-| `BRAPI_TOKEN` | — | chave brapi.dev (só servidor); sem ela, preços de mercado dão fail-open |
 
 ## Investimentos (Épico 7)
 
-Livro de operações (`APORTE/RESGATE/RENDIMENTO`) por ativo, posição derivada (preço médio), preços automáticos (brapi p/ mercado, accrual CDI/prefixado p/ RF, manual), rentabilidade (simples, XIRR, TWR, benchmarks CDI/Ibovespa/IPCA) e rendimentos espelhados no extrato como `INCOME`. IR fora do escopo (valores brutos).
+Livro de operações (`APORTE/RESGATE/RENDIMENTO`) por ativo, posição derivada (preço médio), preços (accrual CDI/prefixado p/ RF contratada, manual p/ o resto), rentabilidade (simples, XIRR, TWR, benchmarks CDI/IPCA via BCB) e rendimentos espelhados no extrato como `INCOME`. IR fora do escopo (valores brutos).
 
 ## Troubleshooting
 

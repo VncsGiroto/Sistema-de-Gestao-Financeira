@@ -1,10 +1,9 @@
-"""Benchmarks no período: CDI (BCB), Ibovespa (brapi), IPCA (BCB)."""
+"""Benchmarks no período: CDI e IPCA (BCB, sem chave)."""
 
 from datetime import date
 from decimal import Decimal
 
 from app.modules.market import bcb
-from app.modules.market import history as hist_mod
 
 
 async def cdi_return(start: date, end: date) -> Decimal | None:
@@ -17,16 +16,6 @@ async def cdi_return(start: date, end: date) -> Decimal | None:
         if start <= d <= end:
             f *= Decimal("1") + c / Decimal("100")
     return (f - Decimal("1")) if series else None
-
-
-async def ibov_return(start: date, end: date) -> Decimal | None:
-    try:
-        pts = await hist_mod.history("^BVSP", start, end)
-    except Exception:
-        return None
-    if len(pts) < 2 or pts[0]["close"] == 0:
-        return None
-    return Decimal(str(pts[-1]["close"] / pts[0]["close"] - 1))
 
 
 async def ipca_return(start: date, end: date) -> Decimal | None:

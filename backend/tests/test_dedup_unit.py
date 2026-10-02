@@ -34,31 +34,31 @@ def _cand(**kw):
         "account_id": 5,
         "date": date(2026, 9, 10),
         "description": "IFOOD JANTAR",
-        "amount": Decimal("-45.90"),
+        "amount": Decimal("45.90"),
     }
     base.update(kw)
     return Candidate(**base)
 
 
 def test_fuzzy_match():
-    ok, score = is_fuzzy(5, date(2026, 9, 11), "IFOOD JANTAR", Decimal("-45.90"), _cand())
+    ok, score = is_fuzzy(5, date(2026, 9, 11), "IFOOD JANTAR", Decimal("45.90"), _cand())
     assert ok and score == 1.0
 
 
 def test_fuzzy_fora_da_janela():
-    ok, _ = is_fuzzy(5, date(2026, 9, 13), "IFOOD JANTAR", Decimal("-45.90"), _cand(), window_days=2)
+    ok, _ = is_fuzzy(5, date(2026, 9, 13), "IFOOD JANTAR", Decimal("45.90"), _cand(), window_days=2)
     assert not ok
-    ok, _ = is_fuzzy(5, date(2026, 9, 13), "IFOOD JANTAR", Decimal("-45.90"), _cand(), window_days=3)
+    ok, _ = is_fuzzy(5, date(2026, 9, 13), "IFOOD JANTAR", Decimal("45.90"), _cand(), window_days=3)
     assert ok
 
 
 def test_fuzzy_outra_conta_ou_valor():
-    ok, _ = is_fuzzy(6, date(2026, 9, 10), "IFOOD JANTAR", Decimal("-45.90"), _cand())
+    ok, _ = is_fuzzy(6, date(2026, 9, 10), "IFOOD JANTAR", Decimal("45.90"), _cand())
     assert not ok
-    ok, _ = is_fuzzy(5, date(2026, 9, 10), "IFOOD JANTAR", Decimal("-45.91"), _cand())
+    ok, _ = is_fuzzy(5, date(2026, 9, 10), "IFOOD JANTAR", Decimal("45.91"), _cand())
     assert not ok
 
 
 def test_fuzzy_descricao_diferente():
-    ok, _ = is_fuzzy(5, date(2026, 9, 10), "NETFLIX", Decimal("-45.90"), _cand())
+    ok, _ = is_fuzzy(5, date(2026, 9, 10), "NETFLIX", Decimal("45.90"), _cand())
     assert not ok

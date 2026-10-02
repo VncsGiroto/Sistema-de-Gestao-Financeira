@@ -1,4 +1,11 @@
-"""Posição derivada do ledger. Puro e unit testável (opera sobre dicts)."""
+"""Posição derivada do ledger. Puro e unit testável (opera sobre dicts).
+
+Regra de custo: custo médio móvel. No resgate, a base de custo é reduzida pelo
+custo médio interno vigente (custo_total / cost_qty), sem arredondamento
+intermediário — arredonda-se somente na saída. Resgate total zera a base, de
+modo que um aporte posterior recomeça o preço médio do zero.
+Este cálculo é gerencial e NÃO constitui apuração fiscal de IR.
+"""
 
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -21,8 +28,8 @@ def _qty(d) -> Decimal:
 def position(ops: list[dict]) -> dict:
     """ops: [{kind, quantity?, price?, fees, amount}]. Retorna posição consolidada."""
     qty = Decimal("0")
-    cost_qty = Decimal("0")  # qty comprada acumulada (p/ preço médio)
-    cost_total = Decimal("0")  # custo total dos aportes (qty*price + fees)
+    cost_qty = Decimal("0")  # qty em carteira com custo (p/ preço médio)
+    cost_total = Decimal("0")  # custo total da qty em carteira (precisão total)
     aportes = Decimal("0")
     resgates = Decimal("0")
     rendimentos = Decimal("0")
@@ -36,6 +43,13 @@ def position(ops: list[dict]) -> dict:
             aportes += amt
         elif o["kind"] == "RESGATE":
             qty -= q
+            if cost_qty > 0:
+                if q >= cost_qty:
+                    cost_qty = Decimal("0")
+                    cost_total = Decimal("0")
+                else:
+                    cost_total -= (cost_total / cost_qty) * q
+                    cost_qty -= q
             resgates += amt
         elif o["kind"] == "RENDIMENTO":
             rendimentos += amt

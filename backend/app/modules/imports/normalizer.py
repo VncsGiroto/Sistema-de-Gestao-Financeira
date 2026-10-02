@@ -33,18 +33,22 @@ def stable_external_id(date_: date, amount: Decimal, memo: str) -> str:
 
 
 def normalize(raw: RawTx, account_id: int, source: str = "OFX") -> NormalizedTx | None:
-    """Retorna None quando a linha é inválida (amount zero/ausente ou sem data)."""
+    """Retorna None quando a linha é inválida (amount zero/ausente ou sem data).
+
+    O sinal do TRNAMT define apenas o `type`; `amount` é sempre positivo.
+    """
     if raw.amount is None or raw.amount == 0 or raw.date is None:
         return None
     original = f"{raw.name} {raw.memo}".strip()
+    amount = abs(raw.amount)
     return NormalizedTx(
         date=raw.date,
         description=clean_description(original) or "SEM DESCRICAO",
-        amount=raw.amount,
+        amount=amount,
         type="INCOME" if raw.amount > 0 else "EXPENSE",
         account_id=account_id,
         source=source,
-        external_id=(raw.fitid.strip() if raw.fitid else None) or stable_external_id(raw.date, raw.amount, original),
+        external_id=(raw.fitid.strip() if raw.fitid else None) or stable_external_id(raw.date, amount, original),
     )
 
 

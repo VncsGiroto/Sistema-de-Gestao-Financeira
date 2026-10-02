@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useCategories, useCategoryMutations } from "./hooks";
 import { ApiError } from "../../lib/api";
-import { Button, PageHeader } from "../../components/ui";
+import { Button, PageHeader, useConfirm } from "../../components/ui";
 import { labelOf, txTypeLabel } from "../../lib/labels";
 
 export function CategoriesPage() {
@@ -14,6 +14,22 @@ export function CategoriesPage() {
   const [msg, setMsg] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
+  const confirm = useConfirm();
+
+  async function onDelete(id: number, name: string) {
+    setMsg("");
+    const ok = await confirm.ask({
+      title: "Excluir categoria?",
+      body: `“${name}” será excluída. Lançamentos que a usam ficarão sem categoria.`,
+      confirmLabel: "Excluir categoria",
+    });
+    if (!ok) return;
+    try {
+      await m.remove.mutateAsync(id);
+    } catch {
+      setMsg("Falha ao excluir.");
+    }
+  }
 
   async function onCreate(ev: FormEvent) {
     ev.preventDefault();
@@ -29,6 +45,7 @@ export function CategoriesPage() {
   return (
     <>
       <PageHeader title="Categorias" sub="Organize receitas e despesas." />
+      {confirm.dialog}
       {msg && <p className="fw-error">{msg}</p>}
       <form onSubmit={onCreate} className="fw-row">
         <input className="fw-input" style={{ width: "auto" }} placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
@@ -57,7 +74,7 @@ export function CategoriesPage() {
               <>
                 <span><strong>{c.name}</strong> ({labelOf(txTypeLabel, c.type)})</span>
                 <Button size="sm" variant="ghost" onClick={() => { setEditing(c.id); setEditName(c.name); }}>Renomear</Button>
-                <Button size="sm" variant="danger" onClick={() => m.remove.mutateAsync(c.id)}>Excluir</Button>
+                <Button size="sm" variant="danger" onClick={() => onDelete(c.id, c.name)}>Excluir</Button>
               </>
             )}
           </li>

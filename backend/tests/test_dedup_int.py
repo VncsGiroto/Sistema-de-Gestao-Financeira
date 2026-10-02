@@ -85,9 +85,9 @@ async def test_exact_fuzzy_review_commit(dac):
     acc = r.json()["id"]
 
     # base manual para os fuzzies
-    await _manual(ac, h, acc, "2026-09-10", "IFOOD JANTAR", "-45.90", "EXPENSE")
+    await _manual(ac, h, acc, "2026-09-10", "IFOOD JANTAR", "45.90", "EXPENSE")
     await _manual(ac, h, acc, "2026-09-05", "SALARIO EMPRESA ABC", "7850.00", "INCOME")
-    await _manual(ac, h, acc, "2026-09-12", "SPOTIFY", "-32.90", "EXPENSE")
+    await _manual(ac, h, acc, "2026-09-12", "SPOTIFY", "32.90", "EXPENSE")
 
     # minimo: tudo NEW → commit direto importa 2 (1 INVALID pula)
     m = await _upload(ac, h, acc, "minimo.ofx")

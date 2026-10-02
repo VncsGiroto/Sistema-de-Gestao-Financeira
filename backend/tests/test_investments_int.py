@@ -45,6 +45,29 @@ async def _user(ac: AsyncClient, tag: str):
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
+async def test_rendimento_categoria_incompativel(iac):
+    """0.2: rendimento espelha INCOME — categoria EXPENSE (explícita ou do ativo) → 422."""
+    ac, h = iac, await _user(iac, "inccat")
+    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "CHECKING"}, headers=h)
+    acc = r.json()["id"]
+    r = await ac.post("/api/categories", json={"name": "Dividendos", "type": "INCOME"}, headers=h)
+    div = r.json()["id"]
+    r = await ac.post("/api/categories", json={"name": "Mercado", "type": "EXPENSE"}, headers=h)
+    exp = r.json()["id"]
+    r = await ac.post(
+        "/api/assets",
+        json={"ticker": "rend1", "asset_class": "RENDA_VARIAVEL", "subtype": "ACAO", "category_id": exp},
+        headers=h,
+    )
+    aid = r.json()["id"]
+
+    base = {"kind": "RENDIMENTO", "date": "2026-03-01", "amount": "25.00", "account_id": acc}
+    assert (await ac.post(f"/api/assets/{aid}/ops", json={**base, "category_id": exp}, headers=h)).status_code == 422
+    assert (await ac.post(f"/api/assets/{aid}/ops", json=base, headers=h)).status_code == 422  # default do ativo
+    r = await ac.post(f"/api/assets/{aid}/ops", json={**base, "category_id": div}, headers=h)
+    assert r.status_code == 201, r.text
+
+
 async def test_assets_ops_position(iac):
     ac, h = iac, await _user(iac, "inv")
     r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "CHECKING"}, headers=h)

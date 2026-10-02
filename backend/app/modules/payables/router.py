@@ -185,5 +185,8 @@ async def delete(payable_id: int, session: AsyncSession = Depends(get_session), 
     row = await repo.get_one(session, user.id, payable_id)
     if row is None:
         raise not_found()
-    await repo.delete(session, row)
+    try:
+        await repo.delete(session, row)
+    except repo.PayableError as e:
+        raise http_error(status.HTTP_409_CONFLICT, "Conflict", str(e))
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -60,8 +60,8 @@ async def test_dashboard_massa_conhecida(dash):
     for a, c, d, desc, amt, t in [
         (acc, sal, "2026-09-05", "SAL", "8000", "INCOME"),
         (acc, None, "2026-09-06", "FREELA", "1500", "INCOME"),
-        (acc, mor, "2026-09-10", "ALUGUEL", "-2000", "EXPENSE"),
-        (acc, mor, "2026-08-10", "ALUGUEL ANT", "-2000", "EXPENSE"),
+        (acc, mor, "2026-09-10", "ALUGUEL", "2000", "EXPENSE"),
+        (acc, mor, "2026-08-10", "ALUGUEL ANT", "2000", "EXPENSE"),
     ]:
         body = {"account_id": a, "date": d, "description": desc, "amount": amt, "type": t}
         if c:

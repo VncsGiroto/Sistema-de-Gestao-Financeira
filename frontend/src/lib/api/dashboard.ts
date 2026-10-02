@@ -6,11 +6,13 @@ export interface CommitmentItem {
   due_date: string;
   amount: string;
   ref_id: number;
+  account_id: number | null;
 }
 
 export interface CommitmentsData {
   total: string;
   items: CommitmentItem[];
+  unassigned_total: string;
 }
 
 export interface DashboardData {

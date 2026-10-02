@@ -23,7 +23,7 @@ from app.core.models import TimestampMixin
 class Account(Base, TimestampMixin):
     __tablename__ = "accounts"
     __table_args__ = (
-        CheckConstraint("account_type IN ('CHECKING','SAVINGS','CREDIT_CARD','CASH','OTHER')", name="ck_accounts_type"),
+        CheckConstraint("account_type IN ('CHECKING','SAVINGS','CASH','INVESTMENT','OTHER')", name="ck_accounts_type"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -53,7 +53,7 @@ class Transaction(Base, TimestampMixin):
     __table_args__ = (
         CheckConstraint("type IN ('INCOME','EXPENSE')", name="ck_tx_type"),
         CheckConstraint("source IN ('MANUAL','OFX','IMPORT','PAYABLE')", name="ck_tx_source"),
-        CheckConstraint("amount <> 0", name="ck_tx_amount"),
+        CheckConstraint("amount > 0", name="ck_tx_amount"),
         UniqueConstraint("user_id", "source", "external_id", name="uq_tx_user_source_external"),
     )
 

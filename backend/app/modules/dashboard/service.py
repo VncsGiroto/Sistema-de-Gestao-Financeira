@@ -76,9 +76,9 @@ async def get_dashboard(
     cum_income = cum_expense = Decimal("0")
     for ttype, amount in (await session.execute(cum_q)).all():
         if ttype == "INCOME":
-            cum_income += abs(amount)
+            cum_income += amount
         else:
-            cum_expense += abs(amount)
+            cum_expense += amount
 
     cats = {
         c.id: c.name
@@ -93,7 +93,7 @@ async def get_dashboard(
     for m in _months_between(start_m, end):
         evo[m] = {"income": Decimal("0"), "expense": Decimal("0")}
     for t in txs:
-        v = abs(t.amount)
+        v = t.amount
         m = t.date.strftime("%Y-%m")
         name: str = cats.get(t.category_id, "Sem categoria") if t.category_id else "Sem categoria"
         if t.type == "INCOME":

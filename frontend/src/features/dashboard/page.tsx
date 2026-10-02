@@ -37,7 +37,7 @@ export function DashboardPage() {
   });
   const { data: accounts } = useAccounts();
   const [horizon, setHorizon] = useState(60);
-  const { data: comm } = useCommitments(horizon);
+  const { data: comm } = useCommitments(horizon, accountId ? Number(accountId) : undefined);
 
   return (
     <>
@@ -81,6 +81,9 @@ export function DashboardPage() {
         {comm && (
           <>
             <p>Total em compromissos: {brl(comm.total)} — Saldo projetado: {brl(String(Number(dash?.balance ?? 0) - Number(comm.total)))}</p>
+            {Number(comm.unassigned_total) > 0 && (
+              <p>Projeção parcial: {brl(comm.unassigned_total)} em compromissos sem conta definida ficaram de fora.</p>
+            )}
             <ul className="fw-list">
               {comm.items.map((c, i) => (
                 <li className="fw-list-item" key={`${c.kind}-${c.ref_id}-${i}`}>

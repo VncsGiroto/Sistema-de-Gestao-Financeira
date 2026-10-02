@@ -3,14 +3,21 @@
 export const accountTypeLabel: Record<string, string> = {
   CHECKING: "Corrente",
   SAVINGS: "Poupança",
-  CREDIT_CARD: "Cartão de crédito",
   CASH: "Dinheiro",
+  INVESTMENT: "Investimento",
   OTHER: "Outra",
 };
 
 export const txTypeLabel: Record<string, string> = {
   INCOME: "Receita",
   EXPENSE: "Despesa",
+};
+
+export const txSourceLabel: Record<string, string> = {
+  MANUAL: "Manual",
+  OFX: "OFX",
+  IMPORT: "Importação",
+  PAYABLE: "Conta paga",
 };
 
 export const billKindLabel: Record<string, string> = {

@@ -220,6 +220,13 @@ async def test_pay_recorrente_e_unica(pac):
     r = await ac.get(f"/api/transactions/{txid}", headers=h)
     assert r.status_code == 200 and r.json()["category_id"] == cat
 
+    # 1.4: filtro por origem
+    r = await ac.get("/api/transactions", params={"source": "PAYABLE", "per_page": 50}, headers=h)
+    assert r.status_code == 200 and any(t["id"] == txid for t in r.json()["data"])
+    r = await ac.get("/api/transactions", params={"source": "MANUAL", "per_page": 50}, headers=h)
+    assert r.status_code == 200 and all(t["id"] != txid for t in r.json()["data"])
+    assert (await ac.get("/api/transactions", params={"source": "PIX"}, headers=h)).status_code == 422
+
     # RECURRING atualiza estimativa ao pagar outro valor
     r = await ac.post(
         "/api/payables",
@@ -239,6 +246,45 @@ async def test_pay_recorrente_e_unica(pac):
     oid = r.json()["id"]
     assert (await ac.post(f"/api/payables/{oid}/pay", json={"account_id": acc}, headers=h)).status_code == 200
     assert (await ac.post(f"/api/payables/{oid}/pay", json={"account_id": acc}, headers=h)).status_code == 422
+
+
+async def test_pay_categoria_incompativel(pac):
+    """0.2: baixa sempre gera EXPENSE — categoria INCOME (no payable ou no override) → 422."""
+    ac, h = pac, await _user(pac, "kcat")
+    acc = await _account(ac, h)
+    r = await ac.post("/api/categories", json={"name": "Salário", "type": "INCOME"}, headers=h)
+    cat_inc = r.json()["id"]
+    cat_exp = await _category(ac, h)
+
+    r = await ac.post(
+        "/api/payables",
+        json={
+            "description": "Aluguel",
+            "kind": "ONE_TIME",
+            "amount": "900",
+            "next_due": "2026-11-01",
+            "category_id": cat_inc,
+        },
+        headers=h,
+    )
+    pid = r.json()["id"]
+    assert (await ac.post(f"/api/payables/{pid}/pay", json={"account_id": acc}, headers=h)).status_code == 422
+
+    r = await ac.post(
+        "/api/payables",
+        json={
+            "description": "Luz",
+            "kind": "ONE_TIME",
+            "amount": "180",
+            "next_due": "2026-11-01",
+            "category_id": cat_exp,
+        },
+        headers=h,
+    )
+    pid2 = r.json()["id"]
+    r = await ac.post(f"/api/payables/{pid2}/pay", json={"account_id": acc, "category_id": cat_inc}, headers=h)
+    assert r.status_code == 422
+    assert (await ac.post(f"/api/payables/{pid2}/pay", json={"account_id": acc}, headers=h)).status_code == 200
 
 
 async def test_pay_parcela_com_desconto(pac):

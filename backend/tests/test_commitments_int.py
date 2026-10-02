@@ -95,4 +95,47 @@ async def test_commitments_agenda(cac):
     # isolamento: outro usuário vê vazio
     h2 = await _user(cac, "z2")
     r = await ac.get("/api/dashboard/commitments", headers=h2)
-    assert r.json() == {"total": "0", "items": []}
+    assert r.json() == {"total": "0", "items": [], "unassigned_total": "0"}
+
+
+async def test_commitments_recorrencia_expandida_e_filtro_conta(cac):
+    """1.2+1.3: mensal em 100d aparece 3×; filtro por conta + sem-conta vai p/ unassigned."""
+    ac, h = cac, await _user(cac, "agx")
+    today = date.today()
+    in5 = (today + timedelta(days=5)).isoformat()
+
+    async def account(name):
+        r = await ac.post("/api/accounts", json={"name": name, "account_type": "CHECKING"}, headers=h)
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    acc1, acc2 = await account("C1"), await account("C2")
+
+    async def payable(body):
+        r = await ac.post("/api/payables", json=body, headers=h)
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    net_body = {"description": "Net", "kind": "FIXED", "amount": "100", "periodicity": "MONTHLY", "due_day": 1}
+    await payable({**net_body, "account_id": acc1})
+    await payable({"description": "Livre", "kind": "FIXED", "amount": "50", "periodicity": "MONTHLY", "due_day": 1})
+    await payable({"description": "Unica", "kind": "ONE_TIME", "amount": "10", "next_due": in5, "account_id": acc2})
+
+    r = await ac.get("/api/dashboard/commitments", params={"horizon_days": 100}, headers=h)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    net = [i for i in d["items"] if i["description"].startswith("Net")]
+    assert len(net) == 3  # next_due + 2 ocorrências mensais
+    assert d["unassigned_total"] == "0"  # sem filtro, tudo entra nos itens
+    assert float(d["total"]) == sum(float(i["amount"]) for i in d["items"])
+
+    r = await ac.get("/api/dashboard/commitments", params={"horizon_days": 100, "account_id": acc1}, headers=h)
+    d1 = r.json()
+    assert {i["description"].split(" (")[0] for i in d1["items"]} == {"Net"}
+    assert d1["unassigned_total"] == "150.00"  # 3× Livre, sem conta: fora da projeção, sinalizado
+
+    r = await ac.get("/api/dashboard/commitments", params={"horizon_days": 100, "account_id": acc2}, headers=h)
+    d2 = r.json()
+    assert [i["description"] for i in d2["items"]] == ["Unica"]
+
+    assert (await ac.get("/api/dashboard/commitments", params={"account_id": 999999}, headers=h)).status_code == 404

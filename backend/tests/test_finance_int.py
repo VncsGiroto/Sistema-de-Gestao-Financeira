@@ -90,6 +90,59 @@ async def test_accounts_crud_e_isolamento(app_client):
     assert r.status_code == 401
 
 
+async def test_account_saldo_atual(app_client):
+    """1.1: atual = inicial + receitas − despesas, com totais e última data."""
+    ac = app_client
+    _, ha = await _user(ac, "saldo")
+    r = await ac.post(
+        "/api/accounts",
+        json={"name": "Corrente", "account_type": "CHECKING", "initial_balance": "100.00"},
+        headers=ha,
+    )
+    assert r.status_code == 201, r.text
+    acc = r.json()
+    assert acc["current_balance"] == "100.00" and acc["total_income"] == "0" and acc["total_expense"] == "0"
+    assert acc["last_transaction_date"] is None
+
+    async def tx(date, desc, amt, t):
+        r = await ac.post(
+            "/api/transactions",
+            json={"account_id": acc["id"], "date": date, "description": desc, "amount": amt, "type": t},
+            headers=ha,
+        )
+        assert r.status_code == 201, r.text
+
+    await tx("2026-09-05", "SAL", "500.00", "INCOME")
+    await tx("2026-09-10", "MERCADO", "200.00", "EXPENSE")
+    await tx("2026-09-12", "FREELA", "50.00", "INCOME")
+
+    r = await ac.get(f"/api/accounts/{acc['id']}", headers=ha)
+    assert r.status_code == 200, r.text
+    got = r.json()
+    assert got["current_balance"] == "450.00"  # 100 + 550 − 200
+    assert got["total_income"] == "550.00" and got["total_expense"] == "200.00"
+    assert got["last_transaction_date"] == "2026-09-12"
+
+    r = await ac.get("/api/accounts", headers=ha)
+    assert r.status_code == 200 and r.json()[0]["current_balance"] == "450.00"
+
+
+async def test_account_types_enum(app_client):
+    """0012: CREDIT_CARD removido (→422), INVESTMENT aceito (→201)."""
+    ac = app_client
+    _, ha = await _user(ac, "erin")
+
+    r = await ac.post("/api/accounts", json={"name": "Cartão", "account_type": "CREDIT_CARD"}, headers=ha)
+    assert r.status_code == 422, r.text
+
+    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "INVESTMENT"}, headers=ha)
+    assert r.status_code == 201, r.text
+    acc_id = r.json()["id"]
+
+    r = await ac.patch(f"/api/accounts/{acc_id}", json={"account_type": "CREDIT_CARD"}, headers=ha)
+    assert r.status_code == 422, r.text
+
+
 async def test_categories_crud_e_uniqueness(app_client):
     ac = app_client
     _, ha = await _user(ac, "carol")

@@ -4,7 +4,7 @@ import { ApiError } from "../../lib/api";
 import type { Payable, PayableBody } from "../../lib/api";
 import { payableKindLabel, labelOf, periodicityLabel } from "../../lib/labels";
 import { brl } from "../../lib/money";
-import { Badge, Button, PageHeader } from "../../components/ui";
+import { Badge, Button, PageHeader, useConfirm } from "../../components/ui";
 import { useAccounts, useCategories } from "../finance/hooks";
 import { usePayableMutations, usePayableSchedule, usePayables } from "./hooks";
 
@@ -28,6 +28,7 @@ function PayBox({ p, onDone }: { p: Payable; onDone: (msg?: string) => void }) {
   const [discount, setDiscount] = useState("");
   const [ns, setNs] = useState<number[]>([]);
   const [msg, setMsg] = useState("");
+  const confirm = useConfirm();
 
   const unpaid = (sched ?? []).filter((s) => !s.paid);
 
@@ -39,6 +40,16 @@ function PayBox({ p, onDone }: { p: Payable; onDone: (msg?: string) => void }) {
     ev.preventDefault();
     setMsg("");
     if (!accountId) return setMsg("Selecione a conta.");
+    const accName = (accounts ?? []).find((a) => String(a.id) === accountId)?.name ?? "conta";
+    const value = p.kind === "INSTALLMENT"
+      ? (ns.length ? `${ns.length} parcela(s)` : "a próxima parcela")
+      : `R$ ${amount.trim() || p.amount}`;
+    const ok = await confirm.ask({
+      title: "Confirmar baixa?",
+      body: `“${p.description}” (${value}) será lançada como despesa em ${accName}.`,
+      confirmLabel: "Baixar",
+    });
+    if (!ok) return;
     try {
       const res = await m.pay.mutateAsync({
         id: p.id,
@@ -63,6 +74,7 @@ function PayBox({ p, onDone }: { p: Payable; onDone: (msg?: string) => void }) {
 
   return (
     <form onSubmit={submit} className="fw-row" style={{ marginTop: 8 }}>
+      {confirm.dialog}
       <select className="fw-select" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
         <option value="">Conta...</option>
         {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -112,6 +124,22 @@ export function PayablesPage() {
   const [n, setN] = useState("12");
   const [firstDue, setFirstDue] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const confirm = useConfirm();
+
+  async function onDelete(id: number, description: string) {
+    setMsg("");
+    const ok = await confirm.ask({
+      title: "Excluir conta a pagar?",
+      body: `“${description}” será excluída. Contas com baixas lançadas são bloqueadas — exclua os lançamentos no extrato antes.`,
+      confirmLabel: "Excluir",
+    });
+    if (!ok) return;
+    try {
+      await m.remove.mutateAsync(id);
+    } catch (e) {
+      setMsg(e instanceof ApiError && e.status === 409 ? "Conta possui baixas lançadas e não pode ser excluída." : "Falha ao excluir.");
+    }
+  }
 
   async function onCreate(ev: FormEvent) {
     ev.preventDefault();
@@ -150,6 +178,7 @@ export function PayablesPage() {
   return (
     <>
       <PageHeader title="Contas a pagar" sub="Fixas, recorrentes, parceladas e únicas — com baixa em movimentações." />
+      {confirm.dialog}
       {msg && <p className="fw-error">{msg}</p>}
       <form onSubmit={onCreate} className="fw-row">
         <input className="fw-input" placeholder="Descrição" value={desc} onChange={(e) => setDesc(e.target.value)} />
@@ -208,7 +237,7 @@ export function PayablesPage() {
                 {p.kind === "INSTALLMENT" && (
                   <Button size="sm" variant="ghost" onClick={() => setOpenSched(openSched === p.id ? null : p.id)}>Parcelas</Button>
                 )}{" "}
-                <Button size="sm" variant="danger" onClick={() => m.remove.mutateAsync(p.id)}>Excluir</Button>
+                <Button size="sm" variant="danger" onClick={() => onDelete(p.id, p.description)}>Excluir</Button>
               </span>
               {payId === p.id && <PayBox p={p} onDone={(m) => { setPayId(null); if (m) setMsg(m); }} />}
               {openSched === p.id && <SchedTable id={p.id} />}

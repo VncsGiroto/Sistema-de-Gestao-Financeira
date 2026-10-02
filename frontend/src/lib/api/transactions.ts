@@ -22,6 +22,9 @@ export interface TxFilters {
   account_id?: number;
   category_id?: number;
   type?: string;
+  source?: string;
+  min?: string;
+  max?: string;
   q?: string;
   page?: number;
   per_page?: number;

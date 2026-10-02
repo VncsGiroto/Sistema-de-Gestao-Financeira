@@ -6,6 +6,10 @@ export interface Account {
   bank: string | null;
   account_type: string;
   initial_balance: string;
+  current_balance: string;
+  total_income: string;
+  total_expense: string;
+  last_transaction_date: string | null;
 }
 
 export interface CreateAccountBody {

@@ -29,9 +29,9 @@ GET /api/transactions/export?format=csv&... (mesmos filtros)
 
 Exemplo `POST /api/transactions`:
 ```json
-{"account_id":1,"category_id":3,"date":"2026-09-22","description":"SUPERMERCADO XYZ","amount":-250.50,"type":"EXPENSE"}
+{"account_id":1,"category_id":3,"date":"2026-09-22","description":"SUPERMERCADO XYZ","amount":250.50,"type":"EXPENSE"}
 ```
-`amount` usa sinal? Não: `amount` sempre >0 no MVP? **Não** — decisão: `amount` pode ser negativo p/ compat OFX, mas `type` é autoritativo. `CHECK (amount <> 0)`.
+`amount` usa sinal? Não: `amount` sempre > 0; o `type` (INCOME/EXPENSE) dá o sentido semântico. `CHECK (amount > 0)`.
 
 ## 3. Imports OFX
 

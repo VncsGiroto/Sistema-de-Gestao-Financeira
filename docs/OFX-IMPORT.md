@@ -13,13 +13,13 @@ Assíncrono desde o dia 1: `POST` retorna `202` imediato; front faz polling em `
 
 ## 2. Parse → Normalização (§5 doc inicial)
 
-Extrair por `STMTTRN`: `FITID → external_id`, `DTPOSTED → date`, `TRNAMT → amount`, `MEMO/NAME → description`, `TRNTYPE → INCOME se >0 else EXPENSE` (confirmável na revisão).
+Extrair por `STMTTRN`: `FITID → external_id`, `DTPOSTED → date`, `TRNAMT → amount`, `MEMO/NAME → description`, sinal do `TRNAMT` → `type` (`INCOME` se >0 senão `EXPENSE`), com `amount = abs(TRNAMT)` (confirmável na revisão).
 
 ```json
-{"date":"2026-09-22","description":"SUPERMERCADO XYZ","amount":-250.50,"type":"EXPENSE","account_id":1,"source":"OFX","external_id":"202609220001"}
+{"date":"2026-09-22","description":"SUPERMERCADO XYZ","amount":250.50,"type":"EXPENSE","account_id":1,"source":"OFX","external_id":"202609220001"}
 ```
 
-Regras: trim + UPPER descrição preservando original em `payload.raw`; `amount <> 0`; data válida; `external_id` estável (`FITID` ou hash `date|amount|memo` se ausente).
+Regras: trim + UPPER descrição preservando original em `payload.raw`; `amount > 0`; data válida; `external_id` estável (`FITID` ou hash `date|amount|memo` se ausente).
 
 ## 3. Validação e idempotência
 

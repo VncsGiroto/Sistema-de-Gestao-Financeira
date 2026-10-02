@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.auth.audit_models import AuditLog
@@ -107,6 +107,8 @@ async def create(
             resolved_next = next_due_date(kind, periodicity, due_day, ref)
         except ValueError as e:
             raise PayableError(str(e))
+    elif kind == "ONE_TIME":
+        resolved_next = next_due  # informado pelo cliente; sem ele a conta nunca aparece na agenda
     elif kind == "INSTALLMENT":
         try:
             schedule(total_amount, num_installments, first_due_date)
@@ -139,6 +141,11 @@ async def create(
 
 
 async def delete(session: AsyncSession, row: Payable) -> None:
+    from app.modules.finance.models import Transaction
+
+    linked = await session.execute(select(func.count()).select_from(Transaction).where(Transaction.payable_id == row.id))
+    if (linked.scalar() or 0) > 0:
+        raise PayableError("Conta possui lançamentos gerados; exclua-os no extrato antes de excluir a conta")
     await session.delete(row)
     await session.commit()
 
@@ -168,8 +175,12 @@ async def pay(
     if account is None:
         raise LookupError("account")
     cat = category_id if category_id is not None else row.category_id
-    if cat is not None and await _owned(session, Category, user_id, cat) is None:
-        raise LookupError("category")
+    if cat is not None:
+        owned = await _owned(session, Category, user_id, cat)
+        if owned is None:
+            raise LookupError("category")
+        if owned.type != "EXPENSE":
+            raise PayableError("Categoria incompatível: a baixa gera uma despesa")
     discount = discount or Decimal("0")
     txs: list[Transaction] = []
 

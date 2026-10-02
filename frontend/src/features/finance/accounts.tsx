@@ -1,11 +1,12 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Link } from "@tanstack/react-router";
 import { useAccountMutations, useAccounts } from "./hooks";
 import { ApiError } from "../../lib/api";
-import { Button, PageHeader } from "../../components/ui";
+import { Button, PageHeader, useConfirm } from "../../components/ui";
 import { accountTypeLabel, labelOf } from "../../lib/labels";
 
-const TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH", "OTHER"] as const;
+const TYPES = ["CHECKING", "SAVINGS", "CASH", "INVESTMENT", "OTHER"] as const;
 
 export function AccountsPage() {
   const { data, isLoading, error } = useAccounts();
@@ -33,8 +34,16 @@ export function AccountsPage() {
     }
   }
 
-  async function onDelete(id: number) {
+  const confirm = useConfirm();
+
+  async function onDelete(id: number, name: string) {
     setMsg("");
+    const ok = await confirm.ask({
+      title: "Excluir conta?",
+      body: `“${name}” será excluída. O histórico de movimentações dela será perdido. Contas com movimentações são bloqueadas.`,
+      confirmLabel: "Excluir conta",
+    });
+    if (!ok) return;
     try {
       await m.remove.mutateAsync(id);
     } catch (e) {
@@ -57,6 +66,7 @@ export function AccountsPage() {
   return (
     <>
       <PageHeader title="Contas" sub="Gerencie suas contas e saldos iniciais." />
+      {confirm.dialog}
       {msg && <p className="fw-error">{msg}</p>}
       <form onSubmit={onCreate} className="fw-row">
         <input className="fw-input" style={{ width: "auto" }} placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
@@ -80,9 +90,14 @@ export function AccountsPage() {
               </>
             ) : (
               <>
-                <span><strong>{a.name}</strong> ({labelOf(accountTypeLabel, a.account_type)}) — R$ {a.initial_balance}</span>
+                <span>
+                  <strong>{a.name}</strong> ({labelOf(accountTypeLabel, a.account_type)}) — Atual R$ {a.current_balance}
+                  {" "}(Inicial R$ {a.initial_balance} · +R$ {a.total_income} / −R$ {a.total_expense}
+                  {a.last_transaction_date ? ` · últ. mov. ${a.last_transaction_date}` : ""})
+                  {" "}<Link to="/app/transactions" search={{ account_id: a.id }}>ver movimentações</Link>
+                </span>
                 <Button size="sm" variant="ghost" onClick={() => { setEditing(a.id); setEditName(a.name); }}>Renomear</Button>
-                <Button size="sm" variant="danger" onClick={() => onDelete(a.id)}>Excluir</Button>
+                <Button size="sm" variant="danger" onClick={() => onDelete(a.id, a.name)}>Excluir</Button>
               </>
             )}
           </li>

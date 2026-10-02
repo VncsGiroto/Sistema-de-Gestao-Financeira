@@ -47,6 +47,29 @@ async def get_category(session: AsyncSession, user_id: int, category_id: int) ->
     return res.scalar_one_or_none()
 
 
+async def account_summaries(session: AsyncSession, user_id: int) -> dict[int, dict]:
+    """Totais por conta (1 GROUP BY): {account_id: {income, expense, last_date}}."""
+    out: dict[int, dict] = {}
+    sums = await session.execute(
+        select(Transaction.account_id, Transaction.type, func.sum(Transaction.amount))
+        .where(Transaction.user_id == user_id)
+        .group_by(Transaction.account_id, Transaction.type)
+    )
+    for account_id, ttype, total in sums.all():
+        d = out.setdefault(account_id, {"income": Decimal("0"), "expense": Decimal("0"), "last_date": None})
+        d["income" if ttype == "INCOME" else "expense"] = total or Decimal("0")
+    lasts = await session.execute(
+        select(Transaction.account_id, func.max(Transaction.date))
+        .where(Transaction.user_id == user_id)
+        .group_by(Transaction.account_id)
+    )
+    for account_id, last_date in lasts.all():
+        out.setdefault(account_id, {"income": Decimal("0"), "expense": Decimal("0"), "last_date": None})[
+            "last_date"
+        ] = last_date
+    return out
+
+
 async def create_category(session: AsyncSession, user_id: int, name: str, type_: str) -> Category:
     row = Category(user_id=user_id, name=name.strip(), type=type_)
     session.add(row)
@@ -62,6 +85,21 @@ async def create_category(session: AsyncSession, user_id: int, name: str, type_:
 async def delete_category(session: AsyncSession, row: Category) -> None:
     await session.delete(row)
     await session.commit()
+
+
+class CategoryMismatch(ValueError):
+    """Categoria existe mas é de tipo (INCOME/EXPENSE) incompatível com a transação."""
+
+
+async def ensure_category_compat(session: AsyncSession, user_id: int, category_id: int | None, tx_type: str) -> None:
+    """Categoria inexistente/de outro usuário → LookupError; tipo divergente → CategoryMismatch."""
+    if category_id is None:
+        return
+    cat = await get_category(session, user_id, category_id)
+    if cat is None:
+        raise LookupError("category")
+    if cat.type != tx_type:
+        raise CategoryMismatch(f"Categoria '{cat.name}' é {cat.type}, incompatível com transação {tx_type}")
 
 
 class TxFilters:
@@ -123,8 +161,7 @@ async def create_tx(
     acc = await get_account(session, user_id, account_id)
     if acc is None:
         raise LookupError("account")
-    if category_id is not None and await get_category(session, user_id, category_id) is None:
-        raise LookupError("category")
+    await ensure_category_compat(session, user_id, category_id, type_)
     row = Transaction(
         user_id=user_id,
         account_id=account_id,

@@ -27,7 +27,8 @@ def test_normalize_campos():
     assert n is not None
     assert n.external_id == "20260910001"
     assert n.account_id == 7 and n.source == "OFX"
-    assert n.type == "EXPENSE" and n.amount == Decimal("-250.50")
+    assert n.type == "EXPENSE" and n.amount == Decimal("250.50")
+    assert n.amount > 0  # 0.3: sinal do OFX vira type; amount sempre positivo
     assert n.description == "SUPERMERCADO XYZ COMPRA CARTAO FINAL 1234"
 
     inc = normalize(raws[1], account_id=7)

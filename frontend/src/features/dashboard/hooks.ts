@@ -28,14 +28,16 @@ export function useDashboard(f: DashboardFilters) {
   });
 }
 
-export function useCommitments(horizonDays: number) {
+export function useCommitments(horizonDays: number, accountId?: number) {
   const { access, refresh } = useAuth();
   return useQuery({
-    queryKey: ["commitments", horizonDays],
+    queryKey: ["commitments", horizonDays, accountId ?? null],
     queryFn: async () => {
       if (!access) throw new Error("Sem sessão");
+      const sp = new URLSearchParams({ horizon_days: String(horizonDays) });
+      if (accountId) sp.set("account_id", String(accountId));
       const { data } = await api.authFetch<CommitmentsData>(
-        `/dashboard/commitments?horizon_days=${horizonDays}`, access, refresh,
+        `/dashboard/commitments?${sp.toString()}`, access, refresh,
       );
       return data;
     },

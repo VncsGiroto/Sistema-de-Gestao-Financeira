@@ -28,27 +28,37 @@ categories = APIRouter(prefix="/api/categories", tags=["categories"])
 transactions = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 not_found = lambda: http_error(status.HTTP_404_NOT_FOUND, "Not Found", "Recurso não encontrado")  # noqa: E731
+unprocessable = lambda d: http_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unprocessable", d)  # noqa: E731
 
 
-def _account_out(row) -> AccountOut:
+def _account_out(row, summary: dict | None = None) -> AccountOut:
+    summary = summary or {}
+    income = summary.get("income", Decimal("0"))
+    expense = summary.get("expense", Decimal("0"))
     return AccountOut(
         id=row.id,
         name=row.name,
         bank=row.bank,
         account_type=row.account_type,
         initial_balance=row.initial_balance,
+        current_balance=row.initial_balance + income - expense,
+        total_income=income,
+        total_expense=expense,
+        last_transaction_date=summary.get("last_date"),
     )
 
 
 @accounts.get("", response_model=list[AccountOut])
 async def list_accounts(session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
-    return [_account_out(r) for r in await repo.list_accounts(session, user.id)]
+    sums = await repo.account_summaries(session, user.id)
+    return [_account_out(r, sums.get(r.id)) for r in await repo.list_accounts(session, user.id)]
 
 
 @accounts.post("", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
 async def create_account(body: AccountIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
     row = await repo.create_account(session, user.id, **body.model_dump())
-    return _account_out(row)
+    sums = await repo.account_summaries(session, user.id)
+    return _account_out(row, sums.get(row.id))
 
 
 @accounts.get("/{account_id}", response_model=AccountOut)
@@ -56,7 +66,8 @@ async def get_account(account_id: int, session: AsyncSession = Depends(get_sessi
     row = await repo.get_account(session, user.id, account_id)
     if row is None:
         raise not_found()  # 404 também para recurso de outro usuário (não vaza existência)
-    return _account_out(row)
+    sums = await repo.account_summaries(session, user.id)
+    return _account_out(row, sums.get(row.id))
 
 
 @accounts.patch("/{account_id}", response_model=AccountOut)
@@ -70,7 +81,8 @@ async def patch_account(
         setattr(row, k, v)
     await session.commit()
     await session.refresh(row)
-    return _account_out(row)
+    sums = await repo.account_summaries(session, user.id)
+    return _account_out(row, sums.get(row.id))
 
 
 @accounts.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -157,7 +169,7 @@ def _filters(
     account_id: int | None = None,
     category_id: int | None = None,
     type: str | None = Query(default=None, pattern="^(INCOME|EXPENSE)$"),
-    source: str | None = Query(default=None, pattern="^(MANUAL|OFX|IMPORT)$"),
+    source: str | None = Query(default=None, pattern="^(MANUAL|OFX|IMPORT|PAYABLE)$"),
     q: str | None = Query(default=None, max_length=200),
     min: Decimal | None = Query(default=None, alias="min"),
     max: Decimal | None = Query(default=None, alias="max"),
@@ -192,6 +204,8 @@ async def create_tx(body: TxIn, session: AsyncSession = Depends(get_session), us
         )
     except LookupError:
         raise not_found()
+    except repo.CategoryMismatch as e:
+        raise unprocessable(str(e))
     return _tx_out(row)
 
 
@@ -213,12 +227,15 @@ async def patch_tx(
     data = body.model_dump(exclude_unset=True)
     if "account_id" in data and await repo.get_account(session, user.id, data["account_id"]) is None:
         raise not_found()
-    if (
-        "category_id" in data
-        and data["category_id"] is not None
-        and await repo.get_category(session, user.id, data["category_id"]) is None
-    ):
+    # valida o estado final (tipo/categoria após o patch, não só o que foi enviado)
+    final_cat = data.get("category_id", row.category_id)
+    final_type = data.get("type", row.type)
+    try:
+        await repo.ensure_category_compat(session, user.id, final_cat, final_type)
+    except LookupError:
         raise not_found()
+    except repo.CategoryMismatch as e:
+        raise unprocessable(str(e))
     for k, v in data.items():
         setattr(row, k, v)
     await session.commit()

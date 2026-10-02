@@ -70,7 +70,7 @@ async def test_tx_crud_e_validacoes(tac):
             "category_id": cat,
             "date": "2026-09-10",
             "description": "SUPERMERCADO",
-            "amount": "-250.50",
+            "amount": "250.50",
             "type": "EXPENSE",
         },
         headers=h,
@@ -79,12 +79,20 @@ async def test_tx_crud_e_validacoes(tac):
     tx = r.json()
     assert tx["source"] == "MANUAL"
 
-    # amount zero → 422
+    # amount zero ou negativo → 422
     r = await ac.post(
         "/api/transactions",
         json={"account_id": acc, "date": "2026-09-10", "description": "Z", "amount": "0", "type": "EXPENSE"},
         headers=h,
     )
+    assert r.status_code == 422
+    r = await ac.post(
+        "/api/transactions",
+        json={"account_id": acc, "date": "2026-09-10", "description": "N", "amount": "-5", "type": "EXPENSE"},
+        headers=h,
+    )
+    assert r.status_code == 422
+    r = await ac.patch(f"/api/transactions/{tx['id']}", json={"amount": "-5"}, headers=h)
     assert r.status_code == 422
 
     # conta inexistente / de outro usuário → 404
@@ -110,10 +118,10 @@ async def test_tx_filtros_paginacao_csv(tac):
     ac, h = tac, await _user(tac, "flt")
     acc, acc2, cat, cat_inc = await _setup(ac, h)
     seed = [
-        (acc, cat, "2026-09-05", "MERCADO A", "-100", "EXPENSE"),
-        (acc, cat, "2026-09-15", "MERCADO B", "-200", "EXPENSE"),
+        (acc, cat, "2026-09-05", "MERCADO A", "100", "EXPENSE"),
+        (acc, cat, "2026-09-15", "MERCADO B", "200", "EXPENSE"),
         (acc2, cat_inc, "2026-09-15", "SALARIO", "8000", "INCOME"),
-        (acc, cat, "2026-08-20", "ANTIGO", "-50", "EXPENSE"),
+        (acc, cat, "2026-08-20", "ANTIGO", "50", "EXPENSE"),
     ]
     for a, c, d, desc, amt, t in seed:
         r = await ac.post(
@@ -134,7 +142,7 @@ async def test_tx_filtros_paginacao_csv(tac):
     assert (await total(type="INCOME"))[0] == 1
     assert (await total(account_id=acc2))[0] == 1
     assert (await total(q="mercado"))[0] == 2
-    assert (await total(min="-150", max="-10"))[0] == 2
+    assert (await total(min="10", max="150"))[0] == 2
 
     # paginação
     r = await ac.get("/api/transactions", params={"page": 1, "per_page": 2}, headers=h)
@@ -151,6 +159,44 @@ async def test_tx_filtros_paginacao_csv(tac):
     assert "MERCADO A" in r.text
 
 
+async def test_tx_categoria_tipo_compativel(tac):
+    """0.2: categoria de tipo divergente → 422 no create e no PATCH (estado final)."""
+    ac, h = tac, await _user(tac, "cat")
+    acc, _, cat_exp, cat_inc = await _setup(ac, h)
+
+    async def create(tx_type, cat):
+        return await ac.post(
+            "/api/transactions",
+            json={
+                "account_id": acc,
+                "category_id": cat,
+                "date": "2026-09-10",
+                "description": "T",
+                "amount": "10",
+                "type": tx_type,
+            },
+            headers=h,
+        )
+
+    assert (await create("INCOME", cat_exp)).status_code == 422
+    assert (await create("EXPENSE", cat_inc)).status_code == 422
+    assert (await create("INCOME", cat_inc)).status_code == 201
+    r = await create("EXPENSE", cat_exp)
+    assert r.status_code == 201, r.text
+    tx = r.json()["id"]
+
+    # PATCH só o tipo → estado final incompatível → 422
+    assert (await ac.patch(f"/api/transactions/{tx}", json={"type": "INCOME"}, headers=h)).status_code == 422
+    # PATCH só a categoria → incompatível → 422
+    assert (await ac.patch(f"/api/transactions/{tx}", json={"category_id": cat_inc}, headers=h)).status_code == 422
+    # PATCH tipo+categoria consistentes → 200
+    r = await ac.patch(f"/api/transactions/{tx}", json={"type": "INCOME", "category_id": cat_inc}, headers=h)
+    assert r.status_code == 200 and r.json()["category_id"] == cat_inc
+    # remover categoria sempre permitido
+    r = await ac.patch(f"/api/transactions/{tx}", json={"category_id": None}, headers=h)
+    assert r.status_code == 200 and r.json()["category_id"] is None
+
+
 async def test_tx_isolamento_e_regras_delete(tac):
     ac = tac
     ha, hb = await _user(ac, "own"), await _user(ac, "out")
@@ -163,7 +209,7 @@ async def test_tx_isolamento_e_regras_delete(tac):
             "category_id": cat,
             "date": "2026-09-10",
             "description": "X",
-            "amount": "-10",
+            "amount": "10",
             "type": "EXPENSE",
         },
         headers=ha,

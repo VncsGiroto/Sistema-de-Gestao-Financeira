@@ -10,6 +10,7 @@ from app.modules.dashboard import commitments as commitments_svc
 from app.modules.dashboard import service
 from app.modules.dashboard.commitments_schemas import CommitmentsOut
 from app.modules.dashboard.schemas import DashboardOut
+from app.modules.finance import repository as finance_repo
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -36,8 +37,11 @@ async def dashboard(
 @router.get("/commitments", response_model=CommitmentsOut)
 async def commitments(
     horizon_days: int = Query(default=60, ge=1, le=365),
+    account_id: int | None = None,
     session: AsyncSession = Depends(get_session),
     user=Depends(get_current_user),
 ):
-    out = await commitments_svc.get_commitments(session, user.id, horizon_days)
+    if account_id is not None and await finance_repo.get_account(session, user.id, account_id) is None:
+        raise not_found()
+    out = await commitments_svc.get_commitments(session, user.id, horizon_days, account_id)
     return CommitmentsOut(**out)

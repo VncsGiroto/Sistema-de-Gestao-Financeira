@@ -28,10 +28,16 @@ test("finance: conta + categoria + lançamento + categoria inline", async ({ pag
   // lançamento
   await page.goto("/app/transactions");
   await page.getByPlaceholder("Descrição").fill("SUPERMERCADO E2E");
-  await page.getByPlaceholder("Valor").fill("-42.50");
+  await page.getByPlaceholder("Valor", { exact: true }).fill("42.50");
   await page.locator("form").filter({ hasText: "Adicionar" }).locator("select").first().selectOption({ index: 1 });
   await page.getByRole("button", { name: /^adicionar$/i }).click();
   await expect(page.getByText(/supermercado e2e/i)).toBeVisible({ timeout: 15000 });
+
+  // filtro por conta: seleciona a conta e a linha continua visível
+  const accountFilter = page.locator("select", { has: page.locator("option", { hasText: "Todas as contas" }) });
+  await accountFilter.selectOption({ index: 1 });
+  await expect(page.getByText(/supermercado e2e/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/total: 1/i)).toBeVisible({ timeout: 15000 });
 
   // categoria inline: primeira linha, seleciona a categoria criada
   const catLabel = `Mercado ${uniq}`;

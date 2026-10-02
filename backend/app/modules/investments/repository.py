@@ -117,8 +117,8 @@ async def add_op(
                 raise ValueError("Quantidade maior que a posição")
         amount = computed
     else:  # RENDIMENTO
-        if amount is None:
-            raise ValueError("RENDIMENTO exige amount")
+        if amount is None or amount <= 0:
+            raise ValueError("RENDIMENTO exige amount positivo")
     row = InvestmentOp(
         user_id=user_id, asset_id=asset_id, kind=kind, date=on, quantity=quantity, price=price, fees=fees, amount=amount
     )
@@ -133,9 +133,12 @@ async def add_op(
             raise LookupError("account")
         cat = category_id if category_id is not None else asset.category_id
         if cat is not None:
-            res = await session.execute(select(Category).where(Category.id == cat, Category.user_id == user_id))
-            if res.scalar_one_or_none() is None:
+            cat_res = await session.execute(select(Category).where(Category.id == cat, Category.user_id == user_id))
+            owned = cat_res.scalar_one_or_none()
+            if owned is None:
                 raise LookupError("category")
+            if owned.type != "INCOME":
+                raise ValueError("Categoria incompatível: o rendimento gera uma receita")
         tx = Transaction(
             user_id=user_id,
             account_id=account_id,

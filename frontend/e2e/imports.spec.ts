@@ -17,7 +17,7 @@ test("import → review → commit", async ({ page }) => {
   await expect(page.getByText(/bem-vindo/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/accounts");
-  await page.getByPlaceholder("Nome").fill("Corrente Imp");
+  await page.getByRole("textbox", { name: "Nome da conta" }).fill("Corrente Imp");
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/corrente imp/i)).toBeVisible({ timeout: 15000 });
 

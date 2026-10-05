@@ -4,8 +4,8 @@ import { api } from "../../lib/api";
 import type { User } from "../../lib/api";
 import { Link } from "@tanstack/react-router";
 import { useAccounts } from "../finance/hooks";
-import { Badge } from "../../components/ui";
-import { CategoryPie, EvolutionChart } from "./charts";
+import { Badge, Button, Field } from "../../components/ui";
+import { CategoryPie, CategorySummary, EvolutionChart } from "./charts";
 import { useCommitments, useDashboard } from "./hooks";
 import { usePortfolio } from "../investments/hooks";
 import { brl } from "../../lib/money";
@@ -51,6 +51,19 @@ export function DashboardPage() {
     return `${d > 0 ? "+" : ""}${((d / Math.abs(Number(old))) * 100).toFixed(1)}% vs ${prev?.month}`;
   };
 
+  const setPeriod = (preset: "month" | "days30" | "") => {
+    if (!preset) {
+      setFrom(""); setTo("");
+      return;
+    }
+    const end = new Date();
+    const start = preset === "month"
+      ? new Date(end.getFullYear(), end.getMonth(), 1)
+      : new Date(end.getTime() - 29 * 864e5);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    setFrom(iso(start)); setTo(iso(end));
+  };
+
   return (
     <>
       <div className="fw-page-head">
@@ -58,13 +71,26 @@ export function DashboardPage() {
         {user ? <p>Bem-vindo, {user.name}</p> : <p>Carregando sessão...</p>}
         {error && <p className="fw-error">{error}</p>}
       </div>
-      <div className="fw-row">
-        <input className="fw-input" style={{ width: "auto" }} type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="De" />
-        <input className="fw-input" style={{ width: "auto" }} type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Até" />
-        <select className="fw-select" style={{ width: "auto" }} value={accountId} onChange={(e) => setAccountId(e.target.value)} aria-label="Conta">
-          <option value="">Todas as contas</option>
-          {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
+      <div className="fw-row" style={{ alignItems: "flex-end" }}>
+        <Field label="Período">
+          <div className="fw-row" style={{ marginBottom: 0 }}>
+            <Button size="sm" variant="ghost" onClick={() => setPeriod("month")}>Este mês</Button>
+            <Button size="sm" variant="ghost" onClick={() => setPeriod("days30")}>Últimos 30 dias</Button>
+            <Button size="sm" variant="ghost" onClick={() => setPeriod("")}>Limpar</Button>
+          </div>
+        </Field>
+        <Field label="De">
+          <input className="fw-input" style={{ width: "auto" }} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </Field>
+        <Field label="Até">
+          <input className="fw-input" style={{ width: "auto" }} type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </Field>
+        <Field label="Conta">
+          <select className="fw-select" style={{ width: "auto" }} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <option value="">Todas as contas</option>
+            {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </Field>
       </div>
       {accounts && accounts.length === 0 && (
         <div className="fw-card" style={{ marginTop: 12 }}>
@@ -80,13 +106,13 @@ export function DashboardPage() {
       {dash && (
         <>
           <div className="fw-metrics">
-            <div className="fw-metric"><strong>Saldo</strong><p>{brl(dash.balance)}</p></div>
+            <div className="fw-metric"><strong>Saldo disponível</strong><p>{brl(dash.balance)}</p><small>inicial + receitas − despesas</small></div>
             <div className="fw-metric"><strong>Receitas</strong><p>{brl(dash.income.total)}</p><small>{varFmt(dash.income.total, prev?.income)}</small></div>
             <div className="fw-metric"><strong>Despesas</strong><p>{brl(dash.expense.total)}</p><small>{varFmt(dash.expense.total, prev?.expense)}</small></div>
             {portfolio && (
               <>
-                <div className="fw-metric"><strong>Patrimônio</strong><p>{brl(portfolio.patrimonio)}</p><small>caixa + investimentos</small></div>
-                <div className="fw-metric"><strong>Investido</strong><p>{brl(portfolio.total)}</p><small>fora de receita/despesa</small></div>
+                <div className="fw-metric"><strong>Patrimônio total</strong><p>{brl(portfolio.patrimonio)}</p><small>saldo + investimentos</small></div>
+                <div className="fw-metric"><strong>Valor investido</strong><p>{brl(portfolio.total)}</p><small>caixa da corretora + posições</small></div>
               </>
             )}
           </div>
@@ -110,8 +136,16 @@ export function DashboardPage() {
             <EvolutionChart data={dash} />
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <div className="fw-card" style={{ flex: 1, minWidth: 260 }}><CategoryPie title="Receitas por categoria" items={dash.income.by_category} /></div>
-            <div className="fw-card" style={{ flex: 1, minWidth: 260 }}><CategoryPie title="Despesas por categoria" items={dash.expense.by_category} /></div>
+            <div className="fw-card" style={{ flex: 1, minWidth: 260 }}>
+              {dash.income.by_category.length <= 1
+                ? <CategorySummary title="Receitas por categoria" items={dash.income.by_category} />
+                : <CategoryPie title="Receitas por categoria" items={dash.income.by_category} />}
+            </div>
+            <div className="fw-card" style={{ flex: 1, minWidth: 260 }}>
+              {dash.expense.by_category.length <= 1
+                ? <CategorySummary title="Despesas por categoria" items={dash.expense.by_category} />
+                : <CategoryPie title="Despesas por categoria" items={dash.expense.by_category} />}
+            </div>
           </div>
         </>
       )}

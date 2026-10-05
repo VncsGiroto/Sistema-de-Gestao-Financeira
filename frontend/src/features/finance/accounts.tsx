@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAccountMutations, useAccounts } from "./hooks";
 import { ApiError } from "../../lib/api";
-import { Button, PageHeader, useConfirm } from "../../components/ui";
+import { Button, Field, PageHeader, useConfirm } from "../../components/ui";
 import { accountTypeLabel, labelOf } from "../../lib/labels";
 
 const TYPES = ["CHECKING", "SAVINGS", "CASH", "INVESTMENT", "OTHER"] as const;
@@ -90,13 +90,21 @@ export function AccountsPage() {
       <PageHeader title="Contas" sub="Gerencie suas contas e saldos iniciais." />
       {confirm.dialog}
       {msg && <p className="fw-error">{msg}</p>}
-      <form onSubmit={onCreate} className="fw-row">
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Nome da conta" placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Banco" placeholder="Banco" value={bank} onChange={(e) => setBank(e.target.value)} />
-        <select className="fw-select" style={{ width: "auto" }} aria-label="Tipo de conta" value={type} onChange={(e) => setType(e.target.value)}>
-          {TYPES.map((t) => <option key={t} value={t}>{labelOf(accountTypeLabel, t)}</option>)}
-        </select>
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Saldo inicial em R$" placeholder="Saldo inicial" value={balance} onChange={(e) => setBalance(e.target.value)} />
+      <form onSubmit={onCreate} className="fw-row" style={{ alignItems: "flex-end" }}>
+        <Field label="Nome da conta">
+          <input className="fw-input" style={{ width: "auto" }} placeholder="Ex.: Nubank" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Banco">
+          <input className="fw-input" style={{ width: "auto" }} placeholder="Ex.: Nu Pagamentos" value={bank} onChange={(e) => setBank(e.target.value)} />
+        </Field>
+        <Field label="Tipo de conta">
+          <select className="fw-select" style={{ width: "auto" }} value={type} onChange={(e) => setType(e.target.value)}>
+            {TYPES.map((t) => <option key={t} value={t}>{labelOf(accountTypeLabel, t)}</option>)}
+          </select>
+        </Field>
+        <Field label="Saldo inicial">
+          <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={balance} onChange={(e) => setBalance(e.target.value)} />
+        </Field>
         <Button type="submit">Criar</Button>
       </form>
       {isLoading && <p>Carregando...</p>}
@@ -106,28 +114,37 @@ export function AccountsPage() {
           <li className="fw-list-item" key={a.id}>
             {editing === a.id ? (
               <>
-                <input className="fw-input" style={{ width: "auto" }} aria-label="Novo nome da conta" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                <Field label="Novo nome">
+                  <input className="fw-input" style={{ width: "auto" }} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                </Field>
                 <Button size="sm" onClick={() => onRename(a.id)}>Salvar</Button>
                 <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button>
               </>
             ) : (
               <>
                 <span>
-                  <strong>{a.name}</strong> ({labelOf(accountTypeLabel, a.account_type)}) — Atual R$ {a.current_balance}
-                  {" "}(Inicial R$ {a.initial_balance} · +R$ {a.total_income} / −R$ {a.total_expense}
-                  {a.last_transaction_date ? ` · últ. mov. ${a.last_transaction_date}` : ""})
+                  <strong>{a.name}</strong> ({labelOf(accountTypeLabel, a.account_type)})
+                  <br />
+                  <span className="fw-sub">
+                    Atual R$ {a.current_balance} · inicial R$ {a.initial_balance} · +R$ {a.total_income} / −R$ {a.total_expense}
+                    {a.last_transaction_date ? ` · últ. mov. ${a.last_transaction_date}` : ""}
+                  </span>
                   {" "}<Link to="/app/transactions" search={{ account_id: a.id }}>ver movimentações</Link>
                 </span>
                 <Button size="sm" variant="ghost" onClick={() => { setTransferId(transferId === a.id ? null : a.id); setTransferTo(""); setTransferAmount(""); }}>Transferir</Button>
                 <Button size="sm" variant="ghost" onClick={() => { setEditing(a.id); setEditName(a.name); }}>Renomear</Button>
                 <Button size="sm" variant="danger" onClick={() => onDelete(a.id, a.name)}>Excluir</Button>
                 {transferId === a.id && (
-                  <form onSubmit={(e) => { e.preventDefault(); onTransfer(a.id, a.name); }} className="fw-row" style={{ marginTop: 8 }}>
-                    <select className="fw-select" style={{ width: "auto" }} aria-label="Conta de destino" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
-                      <option value="">Destino...</option>
-                      {(data ?? []).filter((o) => o.id !== a.id).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                    </select>
-                    <input className="fw-input" style={{ width: "auto" }} aria-label="Valor da transferência em R$" placeholder="Valor" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} />
+                  <form onSubmit={(e) => { e.preventDefault(); onTransfer(a.id, a.name); }} className="fw-row" style={{ marginTop: 8, alignItems: "flex-end", width: "100%" }}>
+                    <Field label="Destino">
+                      <select className="fw-select" style={{ width: "auto" }} value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
+                        <option value="">Destino...</option>
+                        {(data ?? []).filter((o) => o.id !== a.id).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Valor (R$)">
+                      <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} />
+                    </Field>
                     <Button size="sm" type="submit">Enviar</Button>
                   </form>
                 )}

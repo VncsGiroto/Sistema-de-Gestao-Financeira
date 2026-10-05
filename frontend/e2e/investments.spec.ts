@@ -12,25 +12,25 @@ test("investments: ativo + aporte + preço manual + posição", async ({ page })
   await expect(page.getByText(/bem-vindo/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/accounts");
-  await page.getByPlaceholder("Nome").fill("Corretora E2E");
+  await page.getByRole("textbox", { name: "Nome da conta" }).fill("Corretora E2E");
   await page.locator("form").locator("select").first().selectOption("INVESTMENT");
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/corretora e2e/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/investments");
-  await page.getByPlaceholder("Ticker").fill(`TST${uniq.slice(0, 4).toUpperCase()}`);
+  await page.getByRole("textbox", { name: "Ticker" }).fill(`TST${uniq.slice(0, 4).toUpperCase()}`);
   await page.locator("form").first().locator("select").first().selectOption("OUTROS");
-  await page.getByPlaceholder("Subtipo").fill("OUTRO");
-  await page.getByLabel("Conta da corretora (opcional)").selectOption({ label: "Corretora E2E" });
+  await page.getByRole("textbox", { name: "Subtipo" }).fill("OUTRO");
+  await page.getByLabel("Conta da corretora").selectOption({ label: "Corretora E2E" });
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(new RegExp(`tst${uniq.slice(0, 4)}`, "i"))).toBeVisible({ timeout: 15000 });
 
   // detalha, aporta e precifica
   await page.getByRole("button", { name: /detalhar/i }).click();
-  await page.getByPlaceholder("Quantidade").fill("10");
-  await page.getByPlaceholder("Preço").first().fill("100");
+  await page.getByRole("textbox", { name: "Quantidade de cotas" }).fill("10");
+  await page.getByRole("textbox", { name: "Preço por cota (R$)" }).fill("100");
   await page.getByRole("button", { name: /^lançar$/i }).click();
-  await page.getByPlaceholder("Preço manual").fill("120");
+  await page.getByRole("textbox", { name: "Preço manual (R$)" }).fill("120");
   await page.getByRole("button", { name: /precificar/i }).click();
   await expect(page.getByText(/P&L/i)).toBeVisible({ timeout: 15000 });
   // /returns aguarda fail-open dos benchmarks (BCB público): latência fria pode

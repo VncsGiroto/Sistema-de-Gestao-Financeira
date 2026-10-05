@@ -13,14 +13,14 @@ test("agenda: conta futura + parcela aparecem nos compromissos", async ({ page }
   await expect(page.getByText(/bem-vindo/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/payables");
-  await page.getByPlaceholder("Descrição").fill("Internet Agenda");
-  await page.getByPlaceholder("Valor").fill("120");
+  await page.getByRole("textbox", { name: "Descrição" }).fill("Internet Agenda");
+  await page.getByRole("textbox", { name: "Valor mensal (R$)" }).fill("120");
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/internet agenda/i)).toBeVisible({ timeout: 15000 });
 
   await page.locator("form").first().locator("select").first().selectOption("INSTALLMENT");
-  await page.getByPlaceholder("Descrição").fill("Notebook Agenda");
-  await page.getByPlaceholder("Valor total").fill("1200");
+  await page.getByRole("textbox", { name: "Descrição" }).fill("Notebook Agenda");
+  await page.getByRole("textbox", { name: "Valor total (R$)" }).fill("1200");
   await page.locator("form").first().locator('input[type="date"]').fill(firstDue);
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/notebook agenda/i)).toBeVisible({ timeout: 15000 });

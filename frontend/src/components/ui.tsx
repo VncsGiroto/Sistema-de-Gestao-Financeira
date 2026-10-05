@@ -32,6 +32,17 @@ export function Badge({ tone = "", children }: { tone?: "" | "green" | "red" | "
   return <span className={`fw-badge ${tone}`.trim()}>{children}</span>;
 }
 
+/** Rótulo persistente acima do campo (placeholder sozinho não basta). */
+export function Field({ label, hint, title, children }: { label: string; hint?: string; title?: string; children: ReactNode }) {
+  return (
+    <label className="fw-field">
+      <span title={title}>{label}</span>
+      {children}
+      {hint && <small>{hint}</small>}
+    </label>
+  );
+}
+
 export function verdictTone(v: string): "" | "green" | "red" | "amber" | "blue" {
   if (v === "NEW" || v === "IMPORTED" || v === "VALIDATED") return "green";
   if (v === "EXACT_DUPLICATE" || v === "FAILED") return "red";

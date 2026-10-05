@@ -12,13 +12,13 @@ test("payables: criar FIXA + baixar e ver transação", async ({ page }) => {
   await expect(page.getByText(/bem-vindo/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/accounts");
-  await page.getByPlaceholder("Nome").fill("Corrente Pay");
+  await page.getByRole("textbox", { name: "Nome da conta" }).fill("Corrente Pay");
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/corrente pay/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/payables");
-  await page.getByPlaceholder("Descrição").fill("Internet Pay");
-  await page.getByPlaceholder("Valor").fill("120");
+  await page.getByRole("textbox", { name: "Descrição" }).fill("Internet Pay");
+  await page.getByRole("textbox", { name: "Valor mensal (R$)" }).fill("120");
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/internet pay/i)).toBeVisible({ timeout: 15000 });
 
@@ -56,14 +56,14 @@ test("payables: parcelada com desconto antecipando", async ({ page }) => {
   await expect(page.getByText(/bem-vindo/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/accounts");
-  await page.getByPlaceholder("Nome").fill("Conta Pa2");
+  await page.getByRole("textbox", { name: "Nome da conta" }).fill("Conta Pa2");
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/conta pa2/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/payables");
   await page.locator("form").first().locator("select").first().selectOption("INSTALLMENT");
-  await page.getByPlaceholder("Descrição").fill("Curso Pay");
-  await page.getByPlaceholder("Valor total").fill("1000");
+  await page.getByRole("textbox", { name: "Descrição" }).fill("Curso Pay");
+  await page.getByRole("textbox", { name: "Valor total (R$)" }).fill("1000");
   const firstDue = new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10);
   await page.locator("form").first().locator('input[type="date"]').fill(firstDue);
   await page.getByRole("button", { name: /^criar$/i }).click();

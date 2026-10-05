@@ -12,15 +12,15 @@ test("dashboard: resumo reage a lançamentos e filtros", async ({ page }) => {
   await expect(page.getByText(/bem-vindo/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/accounts");
-  await page.getByPlaceholder("Nome").fill("Conta Dash");
+  await page.getByRole("textbox", { name: "Nome da conta" }).fill("Conta Dash");
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/conta dash/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app/transactions");
   await page.locator("form").filter({ hasText: "Adicionar" }).locator("select").first().selectOption({ index: 1 });
-  await page.getByPlaceholder("Descrição").fill("SALARIO DASH");
-  await page.getByPlaceholder("Valor", { exact: true }).fill("1000");
-  await page.locator("form").filter({ hasText: "Adicionar" }).locator("select").nth(2).selectOption("INCOME");
+  await page.getByPlaceholder("Ex.: Supermercado").fill("SALARIO DASH");
+  await page.getByRole("textbox", { name: "Valor (R$)" }).fill("1000");
+  await page.locator("form").filter({ hasText: "Adicionar" }).locator("select").nth(1).selectOption("INCOME");
   await page.getByRole("button", { name: /^adicionar$/i }).click();
   await expect(page.getByText(/salario dash/i)).toBeVisible({ timeout: 15000 });
 

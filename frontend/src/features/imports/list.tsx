@@ -5,7 +5,7 @@ import { useAccounts } from "../finance/hooks";
 import { ApiError } from "../../lib/api";
 import { importStatusLabel, labelOf } from "../../lib/labels";
 import { useImportMutations, useImports } from "./hooks";
-import { Badge, Button, PageHeader, verdictTone } from "../../components/ui";
+import { Badge, Button, Field, PageHeader, verdictTone } from "../../components/ui";
 
 export function ImportsPage() {
   const { data, isLoading } = useImports();
@@ -33,17 +33,31 @@ export function ImportsPage() {
     <>
       <PageHeader title="Importações OFX" sub="Envie extratos e acompanhe o processamento." />
       {msg && <p className="fw-error">{msg}</p>}
-      <form onSubmit={onUpload} className="fw-row">
-        <select className="fw-select" style={{ width: "auto" }} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-          <option value="">Conta...</option>
-          {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <input className="fw-file-hidden" id="ofx-file" type="file" accept=".ofx,.qfx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <label className="fw-btn ghost" htmlFor="ofx-file">Escolher arquivo</label>
-        <span className="fw-file-name">{file ? file.name : "Nenhum .ofx selecionado"}</span>
-        <Button type="submit">Enviar</Button>
-      </form>
+      <div className="fw-card" style={{ marginBottom: 12 }}>
+        <h2 style={{ marginTop: 0 }}>Enviar extrato <span className="fw-sub">passo 1 de 2: conta → arquivo</span></h2>
+        <form onSubmit={onUpload} className="fw-row" style={{ alignItems: "flex-end", marginBottom: 0 }}>
+          <Field label="Conta do extrato">
+            <select className="fw-select" style={{ width: "auto" }} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+              <option value="">Conta...</option>
+              {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Arquivo (.ofx ou .qfx)">
+            <input className="fw-file-hidden" id="ofx-file" type="file" accept=".ofx,.qfx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <label className="fw-btn ghost" htmlFor="ofx-file">Escolher arquivo</label>
+          </Field>
+          <span className="fw-file-name">{file ? file.name : "Nenhum arquivo selecionado"}</span>
+          <Button type="submit" disabled={!accountId || !file}>
+            {accountId && file ? "Enviar e revisar" : "Selecione a conta e o arquivo"}
+          </Button>
+        </form>
+      </div>
       {isLoading && <p>Carregando...</p>}
+      {(data ?? []).length === 0 && !isLoading && (
+        <div className="fw-card" style={{ marginBottom: 12 }}>
+          <p style={{ margin: 0 }}>Nenhuma importação ainda. Exporte o extrato no app do banco (formato OFX), envie acima e revise as duplicatas antes de confirmar — nada entra no extrato sem a sua revisão.</p>
+        </div>
+      )}
       <ul className="fw-list">
         {(data ?? []).map((i) => (
           <li className="fw-list-item" key={i.id}>

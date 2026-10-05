@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "../../lib/api";
 import type { Asset, AssetBody, Position, Returns } from "../../lib/api";
-import { CategoryPie } from "../dashboard/charts";
+import { CategoryPie, SnapshotsLine } from "../dashboard/charts";
 import { brl } from "../../lib/money";
 import { todayISO } from "../../lib/date";
 import {
@@ -15,7 +15,7 @@ import {
   rateTypeHelp,
   rateTypeLabel,
 } from "../../lib/labels";
-import { Badge, Button, PageHeader, useConfirm } from "../../components/ui";
+import { Badge, Button, Field, PageHeader, useConfirm } from "../../components/ui";
 import { useAuth } from "../../lib/auth-store";
 import { useAccounts } from "../finance/hooks";
 import { useAssetMutations, useAssets, useOps, usePortfolio } from "./hooks";
@@ -197,82 +197,99 @@ function AssetDetail({ asset }: { asset: Asset }) {
           )}
         </p>
       )}
-      <form onSubmit={onOp} className="fw-row">
-        <select
-          className="fw-select"
-          aria-label="Tipo de operação"
-          value={kind}
-          onChange={(e) => setKind(e.target.value)}
-        >
-          <option value="APORTE">Aporte (compra)</option>
-          <option value="RESGATE">Resgate (venda)</option>
-          <option value="RENDIMENTO">Rendimento (vira receita)</option>
-        </select>
-        <span>{opKindHelp[kind]}</span>
-        <input
-          className="fw-input"
-          aria-label="Data da operação"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
+      <form onSubmit={onOp} className="fw-row" style={{ alignItems: "flex-end" }}>
+        <Field label="Operação" title={opKindHelp[kind]}>
+          <select
+            className="fw-select"
+            style={{ width: "auto" }}
+            value={kind}
+            onChange={(e) => setKind(e.target.value)}
+          >
+            <option value="APORTE">Aporte (compra)</option>
+            <option value="RESGATE">Resgate (venda)</option>
+            <option value="RENDIMENTO">Rendimento (vira receita)</option>
+            <option value="REINVESTIMENTO">Reinvestimento (compõe posição)</option>
+          </select>
+        </Field>
+        <Field label="Data">
+          <input
+            className="fw-input"
+            style={{ width: "auto" }}
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </Field>
         {!isRendimento ? (
           <>
-            <input
-              className="fw-input"
-              aria-label="Quantidade (cotas/unidades)"
-              placeholder="Quantidade"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-            />
-            <input
-              className="fw-input"
-              aria-label="Preço unitário em R$"
-              placeholder="Preço"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
+            <Field label="Quantidade de cotas">
+              <input
+                className="fw-input"
+                style={{ width: "auto" }}
+                placeholder="Ex.: 10"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+              />
+            </Field>
+            <Field label="Preço por cota (R$)">
+              <input
+                className="fw-input"
+                style={{ width: "auto" }}
+                placeholder="0,00"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
+            </Field>
           </>
         ) : (
           <>
-            <input
-              className="fw-input"
-              aria-label="Valor do rendimento em R$ (vira receita no extrato)"
-              placeholder="Valor (rendimento)"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            <select
-              className="fw-select"
-              aria-label="Conta de destino do rendimento"
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-            >
-              <option value="">Conta (rendimento)...</option>
-              {(accounts ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Field label="Valor do rendimento (R$)">
+              <input
+                className="fw-input"
+                style={{ width: "auto" }}
+                placeholder="0,00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </Field>
+            <Field label="Conta de destino">
+              <select
+                className="fw-select"
+                style={{ width: "auto" }}
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+              >
+                <option value="">Conta (rendimento)...</option>
+                {(accounts ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
           </>
         )}
         <Button size="sm">Lançar</Button>
       </form>
-      <form onSubmit={onPrice} className="fw-row">        <input
-          className="fw-input"
-          aria-label="Data de referência do preço"
-          type="date"
-          value={mdate}
-          onChange={(e) => setMdate(e.target.value)}
-        />
-        <input
-          className="fw-input"
-          aria-label="Preço manual por unidade em R$"
-          placeholder="Preço manual"
-          value={mprice}
-          onChange={(e) => setMprice(e.target.value)}
-        />
+      <form onSubmit={onPrice} className="fw-row" style={{ alignItems: "flex-end" }}>
+        <Field label="Data de referência">
+          <input
+            className="fw-input"
+            style={{ width: "auto" }}
+            type="date"
+            value={mdate}
+            onChange={(e) => setMdate(e.target.value)}
+          />
+        </Field>
+        <Field label="Preço manual (R$)">
+          <input
+            className="fw-input"
+            style={{ width: "auto" }}
+            placeholder="0,00"
+            value={mprice}
+            onChange={(e) => setMprice(e.target.value)}
+          />
+        </Field>
         <Button size="sm" variant="ghost">
           Precificar
         </Button>
@@ -366,125 +383,125 @@ export function InvestmentsPage() {
       {msg && <p className="fw-error">{msg}</p>}
       {confirm.dialog}
       {pf && (
-        <>
+        <section className="fw-card" style={{ marginBottom: 12 }}>
+          <h2 style={{ marginTop: 0 }}>Resumo da carteira</h2>
           <div className="fw-metrics">
-            <div className="fw-metric"><strong>Caixa nas corretoras</strong><p>{brl(pf.cash)}</p></div>
-            <div className="fw-metric"><strong>Posições</strong><p>{brl(pf.positions_value)}</p></div>
-            <div className="fw-metric"><strong>Total</strong><p>{brl(pf.total)}</p></div>
-            <div className="fw-metric"><strong>Resultado</strong><p>{brl(pf.resultado)}</p><small>XIRR {pf.xirr != null ? `${(Number(pf.xirr) * 100).toFixed(2)}% a.a.` : "—"}</small></div>
+            <div className="fw-metric"><strong>Caixa nas corretoras</strong><p>{brl(pf.cash)}</p><small>dinheiro disponível para investir</small></div>
+            <div className="fw-metric"><strong>Posições</strong><p>{brl(pf.positions_value)}</p><small>quantidade × preço atual</small></div>
+            <div className="fw-metric"><strong>Total</strong><p>{brl(pf.total)}</p><small>caixa + posições</small></div>
+            <div className="fw-metric">
+              <strong>Resultado</strong><p>{brl(pf.resultado)}</p>
+              <small title="Taxa interna de retorno anualizada dos aportes, resgates e rendimentos (reinvestimento é fluxo interno e não entra)">XIRR {pf.xirr != null ? `${(Number(pf.xirr) * 100).toFixed(2)}% a.a.` : "—"} ⓘ</small>
+            </div>
           </div>
           <p>Aportes {brl(pf.aportes)} · reinvestido {brl(pf.reinvestimentos)} · resgates {brl(pf.resgates)} · rendimentos {brl(pf.rendimentos)} · investido líquido {brl(pf.net_invested)}</p>
           {pf.unpriced.length > 0 && <p>Sem cotação: {pf.unpriced.join(", ")} — informe o preço manual no ativo.</p>}
           {pf.by_class.length > 0 && (
-            <div className="fw-card" style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 12 }}>
               <CategoryPie title="Por classe" items={pf.by_class.map((s) => ({ name: labelOf(assetClassLabel, s.name), total: s.total }))} />
             </div>
           )}
-          {pf.snapshots.length > 0 && (
-            <div className="fw-card" style={{ marginBottom: 12 }}>
-              <h2 style={{ marginTop: 0 }}>Evolução (desde {pf.history_since})</h2>
-              <ul className="fw-list">
-                {pf.snapshots.map((s) => (
-                  <li className="fw-list-item" key={s.date}>
-                    <span>{s.date} — caixa {brl(s.cash)} · posições {brl(s.positions_value)} · total {brl(s.total)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </>
+          <h3>Evolução {pf.history_since ? `(desde ${pf.history_since})` : ""}</h3>
+          <SnapshotsLine snapshots={pf.snapshots} />
+        </section>
       )}
-      <form onSubmit={onCreate} className="fw-row">
-        <input
-          className="fw-input"
-          placeholder="Ticker"
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value)}
-        />
-        <select
-          className="fw-select"
-          value={aclass}
-          onChange={(e) => setAclass(e.target.value)}
-        >
-          {CLASSES.map((c) => (
-            <option key={c} value={c}>
-              {labelOf(assetClassLabel, c)}
-            </option>
-          ))}
-        </select>
-        <input
-          className="fw-input"
-          aria-label="Subtipo do ativo"
-          placeholder="Subtipo"
-          value={subtype}
-          onChange={(e) => setSubtype(e.target.value)}
-        />
-        <select
-          className="fw-select"
-          aria-label="Conta da corretora (opcional)"
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-        >
-          <option value="">Sem conta vinculada</option>
-          {(accounts ?? []).filter((a) => a.account_type === "INVESTMENT").map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
+      <form onSubmit={onCreate} className="fw-row" style={{ alignItems: "flex-end" }}>
+        <Field label="Ticker">
+          <input
+            className="fw-input"
+            style={{ width: "auto" }}
+            placeholder="Ex.: PETR4"
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value)}
+          />
+        </Field>
+        <Field label="Classe do ativo">
+          <select
+            className="fw-select"
+            style={{ width: "auto" }}
+            value={aclass}
+            onChange={(e) => setAclass(e.target.value)}
+          >
+            {CLASSES.map((c) => (
+              <option key={c} value={c}>
+                {labelOf(assetClassLabel, c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Subtipo">
+          <input
+            className="fw-input"
+            style={{ width: "auto" }}
+            aria-label="Subtipo do ativo"
+            placeholder="Ex.: ACAO"
+            value={subtype}
+            onChange={(e) => setSubtype(e.target.value)}
+          />
+        </Field>
+        <Field label="Conta da corretora">
+          <select
+            className="fw-select"
+            style={{ width: "auto" }}
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
+            <option value="">Sem conta vinculada</option>
+            {(accounts ?? []).filter((a) => a.account_type === "INVESTMENT").map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </Field>
         {isRF && (
           <>
-            <select
-              className="fw-select"
-              value={rateType}
-              onChange={(e) => setRateType(e.target.value)}
-            >
-              <option value="">Sem contrato (preço manual)</option>
-              {RATE_TYPES.map((r) => (
-                <option key={r} value={r}>
-                  {labelOf(rateTypeLabel, r)}
-                </option>
-              ))}
-            </select>
-            {rateType && <span>{rateTypeHelp[rateType]}</span>}
+            <Field label="Contrato" title={rateType ? rateTypeHelp[rateType] : undefined}>
+              <select
+                className="fw-select"
+                style={{ width: "auto" }}
+                value={rateType}
+                onChange={(e) => setRateType(e.target.value)}
+              >
+                <option value="">Sem contrato (preço manual)</option>
+                {RATE_TYPES.map((r) => (
+                  <option key={r} value={r}>
+                    {labelOf(rateTypeLabel, r)}
+                  </option>
+                ))}
+              </select>
+            </Field>
             {rateType && (
               <>
-                <input
-                  className="fw-input"
-                  aria-label={rateType === "CDI_PCT" ? "Percentual do CDI" : "Taxa anual em %"}
-                  placeholder="Taxa (% CDI ou % a.a.)"
-                  value={rate}
-                  onChange={(e) => setRate(e.target.value)}
-                />
-                <input
-                  className="fw-input"
-                  aria-label="Vencimento do contrato"
-                  type="date"
-                  value={maturity}
-                  onChange={(e) => setMaturity(e.target.value)}
-                />
+                <Field label={rateType === "CDI_PCT" ? "Percentual do CDI" : "Taxa anual (%)"}>
+                  <input
+                    className="fw-input"
+                    style={{ width: "auto" }}
+                    placeholder="Ex.: 110"
+                    value={rate}
+                    onChange={(e) => setRate(e.target.value)}
+                  />
+                </Field>
+                <Field label="Vencimento do contrato">
+                  <input
+                    className="fw-input"
+                    style={{ width: "auto" }}
+                    type="date"
+                    value={maturity}
+                    onChange={(e) => setMaturity(e.target.value)}
+                  />
+                </Field>
               </>
             )}
           </>
         )}
         <Button>Criar</Button>
-        <select
-          className="fw-select"
-          value={cls}
-          onChange={(e) => setCls(e.target.value)}
-        >
-          <option value="">Todas as classes</option>
-          {CLASSES.map((c) => (
-            <option key={c} value={c}>
-              {labelOf(assetClassLabel, c)}
-            </option>
-          ))}
-        </select>
       </form>
       {isLoading && <p>Carregando...</p>}
       {!isLoading && (data ?? []).length === 0 && (
         <p>Nenhum ativo ainda — crie o primeiro acima.</p>
       )}
+      <h2>Ativos</h2>
       <ul className="fw-list">
         {(data ?? []).map((a) => (
           <li className="fw-list-item" key={a.id}>
@@ -514,6 +531,23 @@ export function InvestmentsPage() {
           </li>
         ))}
       </ul>
+      <div className="fw-row" style={{ marginTop: 16, alignItems: "flex-end" }}>
+        <Field label="Filtrar por classe">
+          <select
+            className="fw-select"
+            style={{ width: "auto" }}
+            value={cls}
+            onChange={(e) => setCls(e.target.value)}
+          >
+            <option value="">Todas as classes</option>
+            {CLASSES.map((c) => (
+              <option key={c} value={c}>
+                {labelOf(assetClassLabel, c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
     </>
   );
 }

@@ -90,12 +90,14 @@ export const opKindLabel: Record<string, string> = {
   APORTE: "Aporte",
   RESGATE: "Resgate",
   RENDIMENTO: "Rendimento",
+  REINVESTIMENTO: "Reinvestimento",
 };
 
 export const opKindHelp: Record<string, string> = {
   APORTE: "Compra: aumenta quantidade e custo médio.",
   RESGATE: "Venda parcial/total: reduz quantidade e baixa a base de custo pelo médio vigente.",
   RENDIMENTO: "Provento: não altera a posição, mas cria uma receita no extrato na conta de destino.",
+  REINVESTIMENTO: "Provento reinvestido: aumenta posição e custo, sem receita no extrato e sem caixa.",
 };
 
 export const priceSourceLabel: Record<string, string> = {

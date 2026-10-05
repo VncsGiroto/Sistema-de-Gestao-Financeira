@@ -5,7 +5,7 @@ import type { TxFilters } from "../../lib/api";
 import { ApiError } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 import { useAccounts, useCategories, useTxMutations, useTxs } from "./hooks";
-import { Button, PageHeader, useConfirm } from "../../components/ui";
+import { Button, Field, PageHeader, useConfirm } from "../../components/ui";
 import { labelOf, txSourceLabel, txTypeLabel } from "../../lib/labels";
 import { todayISO } from "../../lib/date";
 
@@ -94,50 +94,83 @@ export function TransactionsPage() {
       {confirm.dialog}
       {msg && <p className="fw-error">{msg}</p>}
 
-      <form onSubmit={onCreate} className="fw-row">
-        <select className="fw-select" style={{ width: "auto" }} aria-label="Conta do lançamento" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-          <option value="">Conta...</option>
-          {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <select className="fw-select" style={{ width: "auto" }} aria-label="Categoria do lançamento" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          <option value="">Sem categoria</option>
-          {(categories ?? []).filter((c) => c.type === type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Data do lançamento" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Descrição" placeholder="Descrição" value={desc} onChange={(e) => setDesc(e.target.value)} />
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Valor em R$" placeholder="Valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <select className="fw-select" style={{ width: "auto" }} aria-label="Tipo do lançamento" value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="EXPENSE">Despesa</option>
-          <option value="INCOME">Receita</option>
-        </select>
+      <form onSubmit={onCreate} className="fw-row" style={{ alignItems: "flex-end" }}>
+        <Field label="Conta">
+          <select className="fw-select" style={{ width: "auto" }} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <option value="">Conta...</option>
+            {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Tipo">
+          <select className="fw-select" style={{ width: "auto" }} value={type} onChange={(e) => { setType(e.target.value); setCategoryId(""); }}>
+            <option value="EXPENSE">Despesa</option>
+            <option value="INCOME">Receita</option>
+          </select>
+        </Field>
+        <Field label="Categoria">
+          <select className="fw-select" style={{ width: "auto" }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Sem categoria</option>
+            {(categories ?? []).filter((c) => c.type === type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Descrição">
+          <input className="fw-input" style={{ width: "auto" }} placeholder="Ex.: Supermercado" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        </Field>
+        <Field label="Data">
+          <input className="fw-input" style={{ width: "auto" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field label="Valor (R$)">
+          <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </Field>
         <Button type="submit">Adicionar</Button>
       </form>
 
-      <div className="fw-row">
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Filtrar de" type="date" value={f.from ?? ""} onChange={(e) => set("from", e.target.value || undefined)} />
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Filtrar até" type="date" value={f.to ?? ""} onChange={(e) => set("to", e.target.value || undefined)} />
-        <select className="fw-select" style={{ width: "auto" }} aria-label="Filtrar por conta" value={f.account_id ?? ""} onChange={(e) => set("account_id", e.target.value ? Number(e.target.value) : undefined)}>
-          <option value="">Todas as contas</option>
-          {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <select className="fw-select" style={{ width: "auto" }} aria-label="Filtrar por tipo" value={f.type ?? ""} onChange={(e) => set("type", e.target.value || undefined)}>
-          <option value="">Tipo...</option>
-          <option value="EXPENSE">Despesa</option>
-          <option value="INCOME">Receita</option>
-        </select>
-        <select className="fw-select" style={{ width: "auto" }} aria-label="Filtrar por categoria" value={f.category_id ?? ""} onChange={(e) => set("category_id", e.target.value ? Number(e.target.value) : undefined)}>
-          <option value="">Todas as categorias</option>
-          {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} ({labelOf(txTypeLabel, c.type)})</option>)}
-        </select>
-        <select className="fw-select" style={{ width: "auto" }} aria-label="Filtrar por origem" value={f.source ?? ""} onChange={(e) => set("source", e.target.value || undefined)}>
-          <option value="">Todas as origens</option>
-          {Object.entries(txSourceLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Valor mínimo em R$" placeholder="Valor mín." value={f.min ?? ""} onChange={(e) => set("min", e.target.value || undefined)} />
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Valor máximo em R$" placeholder="Valor máx." value={f.max ?? ""} onChange={(e) => set("max", e.target.value || undefined)} />
-        <input className="fw-input" style={{ width: "auto" }} aria-label="Buscar na descrição" placeholder="Buscar..." value={f.q ?? ""} onChange={(e) => set("q", e.target.value || undefined)} />
-        <Button variant="ghost" onClick={onExport}>Exportar CSV</Button>
-      </div>
+      <details className="fw-filters">
+        <summary>Filtros</summary>
+        <div className="fw-row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+          <Field label="De">
+            <input className="fw-input" style={{ width: "auto" }} type="date" value={f.from ?? ""} onChange={(e) => set("from", e.target.value || undefined)} />
+          </Field>
+          <Field label="Até">
+            <input className="fw-input" style={{ width: "auto" }} type="date" value={f.to ?? ""} onChange={(e) => set("to", e.target.value || undefined)} />
+          </Field>
+          <Field label="Conta">
+            <select className="fw-select" style={{ width: "auto" }} value={f.account_id ?? ""} onChange={(e) => set("account_id", e.target.value ? Number(e.target.value) : undefined)}>
+              <option value="">Todas as contas</option>
+              {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Tipo">
+            <select className="fw-select" style={{ width: "auto" }} value={f.type ?? ""} onChange={(e) => set("type", e.target.value || undefined)}>
+              <option value="">Tipo...</option>
+              <option value="EXPENSE">Despesa</option>
+              <option value="INCOME">Receita</option>
+            </select>
+          </Field>
+          <Field label="Categoria">
+            <select className="fw-select" style={{ width: "auto" }} value={f.category_id ?? ""} onChange={(e) => set("category_id", e.target.value ? Number(e.target.value) : undefined)}>
+              <option value="">Todas as categorias</option>
+              {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} ({labelOf(txTypeLabel, c.type)})</option>)}
+            </select>
+          </Field>
+          <Field label="Origem">
+            <select className="fw-select" style={{ width: "auto" }} value={f.source ?? ""} onChange={(e) => set("source", e.target.value || undefined)}>
+              <option value="">Todas as origens</option>
+              {Object.entries(txSourceLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </Field>
+          <Field label="Valor mín. (R$)">
+            <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={f.min ?? ""} onChange={(e) => set("min", e.target.value || undefined)} />
+          </Field>
+          <Field label="Valor máx. (R$)">
+            <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={f.max ?? ""} onChange={(e) => set("max", e.target.value || undefined)} />
+          </Field>
+          <Field label="Busca">
+            <input className="fw-input" style={{ width: "auto" }} placeholder="Descrição..." value={f.q ?? ""} onChange={(e) => set("q", e.target.value || undefined)} />
+          </Field>
+          <Button variant="ghost" onClick={onExport}>Exportar CSV</Button>
+        </div>
+      </details>
 
       {isLoading && <p>Carregando...</p>}
       <table className="fw-table">

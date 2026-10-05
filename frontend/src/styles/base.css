@@ -52,7 +52,14 @@ a.fw-nav-item { text-decoration: none; }
   padding: 12px 28px; display: flex; justify-content: flex-end; align-items: center;
   font-size: 13px; color: var(--ink-2); position: sticky; top: 0; z-index: 5;
 }
-.fw-content { padding: 28px; max-width: 1080px; width: 100%; margin: 0 auto; }
+.fw-content { padding: 28px; max-width: 1280px; width: 100%; margin: 0 auto; }
+.fw-field { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+.fw-field > span { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.fw-field > small { font-size: 12px; color: var(--ink-3); }
+.fw-hint { font-size: 13px; color: var(--ink-2); }
+.fw-filters { margin-bottom: 16px; }
+.fw-filters summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.fw-sub { font-size: 12px; color: var(--ink-2); font-weight: 400; }
 
 /* componentes */
 .fw-page-head { margin-bottom: 18px; }

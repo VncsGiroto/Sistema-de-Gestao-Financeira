@@ -4,7 +4,7 @@ import { ApiError } from "../../lib/api";
 import type { Payable, PayableBody } from "../../lib/api";
 import { payableKindHelp, payableKindLabel, labelOf, periodicityLabel } from "../../lib/labels";
 import { brl } from "../../lib/money";
-import { Badge, Button, PageHeader, useConfirm } from "../../components/ui";
+import { Badge, Button, Field, PageHeader, useConfirm } from "../../components/ui";
 import { useAccounts, useCategories } from "../finance/hooks";
 import { usePayableHistory, usePayableMutations, usePayableSchedule, usePayables } from "./hooks";
 
@@ -213,43 +213,60 @@ export function PayablesPage() {
       <PageHeader title="Contas a pagar" sub="Fixas, recorrentes, parceladas e únicas — com baixa em movimentações." />
       {confirm.dialog}
       {msg && <p className="fw-error">{msg}</p>}
-      <form onSubmit={onCreate} className="fw-row">
-        <input className="fw-input" aria-label="Descrição da conta" placeholder="Descrição" value={desc} onChange={(e) => setDesc(e.target.value)} />
-        <select className="fw-select" aria-label="Tipo de conta a pagar" value={ckind} onChange={(e) => setCkind(e.target.value)}>
-          {KINDS.map((k) => <option key={k} value={k}>{labelOf(payableKindLabel, k)}</option>)}
-        </select>
+      <form onSubmit={onCreate} className="fw-row" style={{ alignItems: "flex-end" }}>
+        <Field label="Descrição">
+          <input className="fw-input" style={{ width: "auto" }} placeholder="Ex.: Internet" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        </Field>
+        <Field label="Tipo de conta">
+          <select className="fw-select" style={{ width: "auto" }} value={ckind} onChange={(e) => setCkind(e.target.value)}>
+            {KINDS.map((k) => <option key={k} value={k}>{labelOf(payableKindLabel, k)}</option>)}
+          </select>
+        </Field>
         {(ckind === "FIXED" || ckind === "RECURRING") && (
           <>
-            <input className="fw-input" aria-label="Valor mensal em R$" placeholder="Valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <select className="fw-select" aria-label="Periodicidade" value={periodicity} onChange={(e) => setPeriodicity(e.target.value)}>
-              {PERIODS.map((p) => <option key={p} value={p}>{labelOf(periodicityLabel, p)}</option>)}
-            </select>
-            <input className="fw-input" aria-label="Dia do vencimento (1-31)" placeholder="Dia" value={dueDay} onChange={(e) => setDueDay(e.target.value)} style={{ width: 64 }} />
+            <Field label="Valor mensal (R$)">
+              <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </Field>
+            <Field label="Periodicidade">
+              <select className="fw-select" style={{ width: "auto" }} value={periodicity} onChange={(e) => setPeriodicity(e.target.value)}>
+                {PERIODS.map((p) => <option key={p} value={p}>{labelOf(periodicityLabel, p)}</option>)}
+              </select>
+            </Field>
+            <Field label="Dia do vencimento">
+              <input className="fw-input" style={{ width: 64 }} placeholder="10" value={dueDay} onChange={(e) => setDueDay(e.target.value)} />
+            </Field>
           </>
         )}
         {ckind === "ONE_TIME" && (
           <>
-            <input className="fw-input" aria-label="Valor em R$" placeholder="Valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <input className="fw-input" aria-label="Data de vencimento" type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} />
+            <Field label="Valor (R$)">
+              <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </Field>
+            <Field label="Vencimento">
+              <input className="fw-input" style={{ width: "auto" }} type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} />
+            </Field>
           </>
         )}
         {ckind === "INSTALLMENT" && (
           <>
-            <input className="fw-input" aria-label="Valor total da compra em R$" placeholder="Valor total" value={total} onChange={(e) => setTotal(e.target.value)} />
-            <input className="fw-input" aria-label="Número de parcelas (2-60)" placeholder="Nº" value={n} onChange={(e) => setN(e.target.value)} style={{ width: 64 }} />
-            <input className="fw-input" aria-label="Vencimento da primeira parcela" type="date" value={firstDue} onChange={(e) => setFirstDue(e.target.value)} />
+            <Field label="Valor total (R$)">
+              <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={total} onChange={(e) => setTotal(e.target.value)} />
+            </Field>
+            <Field label="Parcelas">
+              <input className="fw-input" style={{ width: 64 }} placeholder="12" value={n} onChange={(e) => setN(e.target.value)} />
+            </Field>
+            <Field label="Primeiro vencimento">
+              <input className="fw-input" style={{ width: "auto" }} type="date" value={firstDue} onChange={(e) => setFirstDue(e.target.value)} />
+            </Field>
           </>
         )}
-        <select className="fw-select" aria-label="Categoria (despesa)" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          <option value="">Categoria...</option>
-          {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <Field label="Categoria (despesa)">
+          <select className="fw-select" style={{ width: "auto" }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Categoria...</option>
+            {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
         <Button>Criar</Button>
-        <select className="fw-select" aria-label="Filtrar por tipo" value={kind} onChange={(e) => setKind(e.target.value)}>
-          <option value="">Todas</option>
-          {KINDS.map((k) => <option key={k} value={k}>{labelOf(payableKindLabel, k)}</option>)}
-        </select>
-        <label><input type="checkbox" checked={onlyUpcoming} onChange={(e) => setOnlyUpcoming(e.target.checked)} /> Próximas 30d</label>
       </form>
       {isLoading && <p>Carregando...</p>}
       <ul className="fw-list">
@@ -286,13 +303,19 @@ export function PayablesPage() {
               {payId === p.id && <PayBox p={p} onDone={(m) => { setPayId(null); if (m) setMsg(m); }} />}
               {detailId === p.id && <DetailPanel p={p} />}
               {editingId === p.id && (
-                <form onSubmit={(e) => { e.preventDefault(); onSaveEdit(p); }} className="fw-row" style={{ marginTop: 8 }}>
-                  <input className="fw-input" style={{ width: "auto" }} aria-label="Descrição" placeholder="Descrição" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+                <form onSubmit={(e) => { e.preventDefault(); onSaveEdit(p); }} className="fw-row" style={{ marginTop: 8, alignItems: "flex-end", width: "100%" }}>
+                  <Field label="Descrição">
+                    <input className="fw-input" style={{ width: "auto" }} placeholder="Descrição" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+                  </Field>
                   {p.kind !== "INSTALLMENT" && (
-                    <input className="fw-input" style={{ width: "auto" }} aria-label="Valor" placeholder="Valor" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+                    <Field label="Valor (R$)">
+                      <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+                    </Field>
                   )}
                   {p.kind === "ONE_TIME" && (
-                    <input className="fw-input" style={{ width: "auto" }} aria-label="Vencimento" type="date" value={editNextDue} onChange={(e) => setEditNextDue(e.target.value)} />
+                    <Field label="Vencimento">
+                      <input className="fw-input" style={{ width: "auto" }} type="date" value={editNextDue} onChange={(e) => setEditNextDue(e.target.value)} />
+                    </Field>
                   )}
                   <Button size="sm" type="submit">Salvar</Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancelar</Button>
@@ -303,6 +326,15 @@ export function PayablesPage() {
           );
         })}
       </ul>
+      <div className="fw-row" style={{ marginTop: 16, alignItems: "flex-end" }}>
+        <Field label="Filtrar por tipo">
+          <select className="fw-select" style={{ width: "auto" }} value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="">Todas</option>
+            {KINDS.map((k) => <option key={k} value={k}>{labelOf(payableKindLabel, k)}</option>)}
+          </select>
+        </Field>
+        <label><input type="checkbox" checked={onlyUpcoming} onChange={(e) => setOnlyUpcoming(e.target.checked)} /> Próximas 30d</label>
+      </div>
     </>
   );
 }
@@ -314,7 +346,7 @@ function DetailPanel({ p }: { p: Payable }) {
   const accName = (accounts ?? []).find((a) => a.id === p.account_id)?.name;
   const catName = (categories ?? []).find((c) => c.id === p.category_id)?.name;
   return (
-    <div className="fw-card" style={{ marginTop: 8 }}>
+    <div className="fw-card" style={{ marginTop: 8, width: "100%" }}>
       <p style={{ marginTop: 0 }}>{labelOf(payableKindLabel, p.kind)} — {payableKindHelp[p.kind] ?? ""}</p>
       <p>
         {p.amount ? <>Valor {brl(p.amount)} · </> : null}

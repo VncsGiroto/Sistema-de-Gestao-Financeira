@@ -1,5 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "../lib/auth-store";
+import { Logo } from "./Logo";
 
 const SECTIONS: { title: string; items: { to: "/app" | "/app/accounts" | "/app/categories" | "/app/transactions" | "/app/imports" | "/app/payables" | "/app/investments"; label: string; icon: string }[] }[] = [
   {
@@ -39,7 +40,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="fw-shell">
       <aside className="fw-sidebar">
         <div className="fw-brand">
-          <span className="fw-brand-mark">F</span>
+          <Logo variant="mark" size={34} />
           <span>
             <span className="fw-brand-name">FinanceWay</span>
             <br />

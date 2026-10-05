@@ -50,6 +50,10 @@ export const txsApi = {
     request<Tx>(`/transactions/${id}`, { method: "PATCH", body: JSON.stringify(body) }, access),
   remove: (id: number, access: string) =>
     request<void>(`/transactions/${id}`, { method: "DELETE" }, access),
+  categorize: (body: { ids: number[]; category_id: number }, access: string) =>
+    request<{ updated: number; skipped_type: number; skipped_missing: number }>(
+      `/transactions/categorize`, { method: "POST", body: JSON.stringify(body) }, access,
+    ),
 };
 
 export async function downloadTransactionsCsv(

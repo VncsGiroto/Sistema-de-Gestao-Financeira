@@ -1,5 +1,5 @@
 import { request, requestForm } from "./http";
-import type { Tx } from "./transactions";
+import type { Tx, TxPage } from "./transactions";
 
 export interface ImportJob {
   id: number;
@@ -20,11 +20,18 @@ export interface ImportItem {
   verdict: string;
   payload: Record<string, unknown>;
   matched_transaction_id: number | null;
+  decision: string | null;
 }
 
 export interface ReviewDecision {
   item_id: number;
   decision: string;
+}
+
+export interface BulkCategorizeResult {
+  updated: number;
+  skipped_type: number;
+  skipped_missing: number;
 }
 
 export interface UploadImportResult {
@@ -62,4 +69,6 @@ export const importsApi = {
   commit: (id: number, access: string) =>
     request<CommitImportResult>(`/imports/${id}/commit`, { method: "POST" }, access),
   matched: (txId: number, access: string) => request<Tx>(`/transactions/${txId}`, {}, access),
+  batch: (id: number, access: string) =>
+    request<TxPage>(`/transactions?import_id=${id}&per_page=100`, {}, access),
 };

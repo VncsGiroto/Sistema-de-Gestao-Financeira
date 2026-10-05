@@ -20,6 +20,8 @@ export interface DashboardData {
   income: { total: string; by_category: { name: string; total: string }[] };
   expense: { total: string; by_category: { name: string; total: string }[] };
   evolution: { month: string; income: string; expense: string }[];
+  prev_month: { month: string; income: string; expense: string } | null;
+  uncategorized: number;
 }
 
 export interface DashboardFilters {

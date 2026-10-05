@@ -29,4 +29,10 @@ test("investments: ativo + aporte + preço manual + posição", async ({ page })
   // /returns aguarda fail-open dos benchmarks (BCB público): latência fria pode
   // estourar 15s na primeira chamada; valores não importam, só a presença.
   await expect(page.getByText(/XIRR/i)).toBeVisible({ timeout: 60000 });
+
+  // histórico lista o aporte; excluir com confirmação recalcula a posição
+  await expect(page.getByText(/histórico de operações \(1\)/i)).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: /^excluir$/i }).last().click();
+  await page.getByRole("alertdialog").getByRole("button", { name: /excluir operação/i }).click();
+  await expect(page.getByText(/histórico de operações \(0\)/i)).toBeVisible({ timeout: 15000 });
 });

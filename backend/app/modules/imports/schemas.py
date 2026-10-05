@@ -23,6 +23,7 @@ class ImportItemOut(BaseModel):
     verdict: str
     payload: dict
     matched_transaction_id: int | None = None
+    decision: str | None = None
 
 
 class DecisionIn(BaseModel):

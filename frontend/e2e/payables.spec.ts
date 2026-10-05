@@ -22,11 +22,22 @@ test("payables: criar FIXA + baixar e ver transação", async ({ page }) => {
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(/internet pay/i)).toBeVisible({ timeout: 15000 });
 
-  // baixa: seleciona a conta e confirma
+  // baixa: seleciona a conta, confirma no diálogo e baixa
   await page.getByRole("button", { name: /^pagar$/i }).click();
   await page.locator("form").filter({ hasText: "Baixar" }).locator("select").first().selectOption({ index: 1 });
   await page.getByRole("button", { name: /^baixar$/i }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: /^baixar$/i }).click();
   await expect(page.getByText(/baixado/i)).toBeVisible({ timeout: 15000 });
+
+  // detalhe: explicação do conceito + histórico com a baixa lançada
+  await page.getByRole("button", { name: /^detalhar$/i }).click();
+  await expect(page.getByText(/histórico de baixas \(1\)/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/valor igual todo mês/i)).toBeVisible({ timeout: 15000 });
+
+  // excluir conta com baixa lançada é bloqueado, com explicação
+  await page.getByRole("button", { name: /^excluir$/i }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: /^excluir$/i }).click();
+  await expect(page.getByText(/não pode ser excluída/i)).toBeVisible({ timeout: 15000 });
 
   // transação aparece no extrato
   await page.goto("/app/transactions");
@@ -66,5 +77,6 @@ test("payables: parcelada com desconto antecipando", async ({ page }) => {
   await box.getByText(/^3 \(R\$/).click();
   await box.getByPlaceholder("Desconto").fill("100");
   await page.getByRole("button", { name: /^baixar$/i }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: /^baixar$/i }).click();
   await expect(page.getByText(/baixado/i)).toBeVisible({ timeout: 15000 });
 });

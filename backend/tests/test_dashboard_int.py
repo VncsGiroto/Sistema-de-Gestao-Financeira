@@ -87,6 +87,11 @@ async def test_dashboard_massa_conhecida(dash):
     assert len(d["evolution"]) == 1 and d["evolution"][0]["month"] == "2026-09"
     assert D(d["evolution"][0]["income"]) == Decimal("9500") and D(d["evolution"][0]["expense"]) == Decimal("2000")
 
+    # 5.x: mês anterior p/ comparação + pendências de categorização
+    assert d["prev_month"]["month"] == "2026-08"
+    assert D(d["prev_month"]["income"]) == Decimal("0") and D(d["prev_month"]["expense"]) == Decimal("2000")
+    assert d["uncategorized"] == 1  # FREELA sem categoria
+
     # filtro conta inexistente → 404; sem token → 401
     assert (await ac.get("/api/dashboard", params={"account_id": 999999}, headers=h)).status_code == 404
     assert (await ac.get("/api/dashboard", params={"from": "2026-09-01", "to": "2026-09-30"})).status_code == 401

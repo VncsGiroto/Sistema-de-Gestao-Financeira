@@ -24,3 +24,5 @@ class DashboardOut(BaseModel):
     income: Side
     expense: Side
     evolution: list[EvoItem]
+    prev_month: EvoItem | None = None
+    uncategorized: int = 0

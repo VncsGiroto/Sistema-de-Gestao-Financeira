@@ -86,6 +86,8 @@ async def test_upload_parse_e_itens(oac):
     assert len(by_verdict.get("NEW", [])) == 2
     assert len(by_verdict.get("INVALID", [])) == 1
     assert by_verdict["NEW"][0]["payload"]["external_id"] == "20260910001"
+    # 4.x: campo decision exposto (None antes de qualquer review)
+    assert all(it["decision"] is None for it in r.json())
 
     # lista resumida
     r = await ac.get("/api/imports", headers=h)
@@ -96,6 +98,25 @@ async def test_upload_parse_e_itens(oac):
         "/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("extrato.ofx", raw)}, headers=h
     )
     assert r.status_code == 202 and r.json()["import_id"] != imp_id
+
+
+async def test_commit_e_filtro_import_id(oac):
+    """4.x: commit liga txs ao import; ?import_id= retorna exatamente o lote."""
+    ac, h = oac, await _user(oac, "impid")
+    acc = await _account(ac, h)
+    raw = (FIX / "minimo.ofx").read_bytes()
+    r = await ac.post(
+        "/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("extrato.ofx", raw)}, headers=h
+    )
+    imp_id = r.json()["import_id"]
+    assert (await _wait_validated(ac, imp_id, h))["status"] == "VALIDATED"
+
+    r = await ac.post(f"/api/imports/{imp_id}/commit", headers=h)
+    assert r.status_code == 200 and r.json()["imported_rows"] == 2, r.text
+
+    r = await ac.get("/api/transactions", params={"import_id": imp_id, "per_page": 50}, headers=h)
+    assert r.status_code == 200 and len(r.json()["data"]) == 2
+    assert all(t["source"] == "OFX" for t in r.json()["data"])
 
 
 async def test_arquivo_invalido_e_regras(oac):

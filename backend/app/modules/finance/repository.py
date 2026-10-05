@@ -111,6 +111,8 @@ class TxFilters:
         category_id: int | None = None,
         type_: str | None = None,
         source: str | None = None,
+        payable_id: int | None = None,
+        import_id: int | None = None,
         q: str | None = None,
         min_: Decimal | None = None,
         max_: Decimal | None = None,
@@ -121,6 +123,8 @@ class TxFilters:
         self.category_id = category_id
         self.type_ = type_
         self.source = source
+        self.payable_id = payable_id
+        self.import_id = import_id
         self.q = q
         self.min_ = min_
         self.max_ = max_
@@ -138,6 +142,10 @@ class TxFilters:
             q = q.where(Transaction.type == self.type_)
         if self.source:
             q = q.where(Transaction.source == self.source)
+        if self.payable_id:
+            q = q.where(Transaction.payable_id == self.payable_id)
+        if self.import_id:
+            q = q.where(Transaction.import_id == self.import_id)
         if self.q:
             q = q.where(Transaction.description.ilike(f"%{self.q}%"))
         if self.min_ is not None:
@@ -199,6 +207,26 @@ async def export_txs(session: AsyncSession, user_id: int, f: TxFilters, limit: i
         .limit(limit)
     )
     return list(res.scalars().all())
+
+
+async def bulk_set_category(session: AsyncSession, user_id: int, ids: list[int], category_id: int) -> dict[str, int]:
+    """Aplica a categoria aos lançamentos compatíveis; incompatíveis/inexistentes são contados e pulados."""
+    cat = await get_category(session, user_id, category_id)
+    if cat is None:
+        raise LookupError("category")
+    updated = skipped_type = skipped_missing = 0
+    for tid in ids:
+        row = await get_tx(session, user_id, tid)
+        if row is None:
+            skipped_missing += 1
+            continue
+        if row.type != cat.type:
+            skipped_type += 1
+            continue
+        row.category_id = cat.id
+        updated += 1
+    await session.commit()
+    return {"updated": updated, "skipped_type": skipped_type, "skipped_missing": skipped_missing}
 
 
 async def delete_tx(session: AsyncSession, row: Transaction) -> None:

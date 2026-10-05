@@ -22,8 +22,9 @@ Swagger: `/api/docs`. ReDoc: `/api/redoc`. Spec: `backend/openapi.yaml` (gerado 
 ```
 GET+POST /api/accounts · GET+PATCH+DELETE /api/accounts/{id}
 GET+POST /api/categories?type=EXPENSE · GET+PATCH+DELETE /api/categories/{id}
-GET+POST /api/transactions?from=&to=&category_id=&account_id=&type=&source=&q=&min=&max=
+GET+POST /api/transactions?from=&to=&category_id=&account_id=&type=&source=&payable_id=&q=&min=&max=
 GET+PATCH+DELETE /api/transactions/{id}
+POST /api/transactions/categorize {ids[], category_id} → {updated, skipped_type, skipped_missing} (pula incompatíveis)
 GET /api/transactions/export?format=csv&... (mesmos filtros)
 ```
 
@@ -39,7 +40,7 @@ Exemplo `POST /api/transactions`:
 POST /api/imports/ofx (multipart: account_id, file .ofx) → 202 {import_id,status:RECEIVED}
 GET /api/imports → lista com contadores
 GET /api/imports/{id} → status + resumo {total,imported,duplicates,failed}
-GET /api/imports/{id}/items?verdict=FUZZY_CANDIDATE → itens p/ revisão
+GET /api/imports/{id}/items → [{id, row_no, verdict, payload, matched_transaction_id, decision}] (`decision` nulo até revisar)
 POST /api/imports/{id}/review {decisions:[{item_id,decision:KEEP_BOTH|DISCARD_IMPORTED}]} → 200
 POST /api/imports/{id}/commit → 200 {imported_rows} (só após review dos FUZZY)
 ```

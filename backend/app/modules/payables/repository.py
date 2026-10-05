@@ -143,7 +143,9 @@ async def create(
 async def delete(session: AsyncSession, row: Payable) -> None:
     from app.modules.finance.models import Transaction
 
-    linked = await session.execute(select(func.count()).select_from(Transaction).where(Transaction.payable_id == row.id))
+    linked = await session.execute(
+        select(func.count()).select_from(Transaction).where(Transaction.payable_id == row.id)
+    )
     if (linked.scalar() or 0) > 0:
         raise PayableError("Conta possui lançamentos gerados; exclua-os no extrato antes de excluir a conta")
     await session.delete(row)

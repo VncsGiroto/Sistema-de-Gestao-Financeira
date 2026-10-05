@@ -29,8 +29,10 @@ test("import → review → commit", async ({ page }) => {
   await expect(page.getByText(/revisão da importação/i)).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/Validada/)).toBeVisible({ timeout: 20000 });
 
-  // itens NEW aparecem; commit direto (sem pendências) importa
-  await expect(page.getByText(/SUPERMERCADO XYZ/)).toBeVisible({ timeout: 15000 });
+  // itens NEW aparecem; resumo mostra contadores e botão informa o que será feito
+  await expect(page.getByText(/supermercado xyz/i).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/aguardando decisão 0/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("button", { name: /confirmar importação: 2 lançamentos/i })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: /confirmar importação/i }).click();
   await expect(page.getByText("Importados 2, duplicados 0, pulados 0.")).toBeVisible({ timeout: 15000 });
 

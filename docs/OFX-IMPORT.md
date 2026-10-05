@@ -27,6 +27,15 @@ Regras: trim + UPPER descrição preservando original em `payload.raw`; `amount 
 - `commit` idempotente por `import_id` (segunda chamada retorna contadores sem reinserir).
 - Arquivo original preservado em volume p/ auditoria; `file_path` nunca exposto publicamente.
 
+## 4. Fluxo em etapas (UI)
+
+Upload → Processamento (polling de status; ações bloqueadas até `VALIDATED`) → Resumo
+(NEW/exatos/possíveis/inválidos/pendentes) → Duplicatas (item a item ou "manter/descartar
+todas") → Confirmação (`Confirmar importação: N lançamentos · M descartadas`, bloqueado
+enquanto houver pendência) → Categorização em massa pós-commit (lote via
+`GET /transactions?import_id=`, `POST /transactions/categorize`; incompatíveis por tipo
+são pulados e contados).
+
 ## 4. Erros
 
 OFX malformado → `FAILED + error` legível; linha inválida isolada marca item `INVALID` sem abortar lote.

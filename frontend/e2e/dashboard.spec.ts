@@ -19,13 +19,18 @@ test("dashboard: resumo reage a lançamentos e filtros", async ({ page }) => {
   await page.goto("/app/transactions");
   await page.locator("form").filter({ hasText: "Adicionar" }).locator("select").first().selectOption({ index: 1 });
   await page.getByPlaceholder("Descrição").fill("SALARIO DASH");
-  await page.getByPlaceholder("Valor").fill("1000");
+  await page.getByPlaceholder("Valor", { exact: true }).fill("1000");
   await page.locator("form").filter({ hasText: "Adicionar" }).locator("select").nth(2).selectOption("INCOME");
   await page.getByRole("button", { name: /^adicionar$/i }).click();
   await expect(page.getByText(/salario dash/i)).toBeVisible({ timeout: 15000 });
 
   await page.goto("/app");
   await expect(page.getByText(/R\$\s1\.000,00/).first()).toBeVisible({ timeout: 15000 });
+
+  // 5.x: pendência de categorização, variação vs mês anterior e contas com saldo
+  await expect(page.getByText(/1 lançamento\(s\) sem categoria/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/sem base anterior/i).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/atual R\$/i).first()).toBeVisible({ timeout: 15000 });
 
   // filtro que exclui o lançamento zera o resumo
   await page.getByLabel("De").fill("2020-01-01");

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import type { Asset, AssetBody, OpBody } from "../../lib/api";
+import type { Asset, AssetBody, Op, OpBody } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 
 const STALE = 30_000;
@@ -21,6 +21,20 @@ export function useAssets(asset_class?: string) {
   });
 }
 
+export function useOps(assetId: number | null) {
+  const { access, refresh } = useAuth();
+  return useQuery({
+    queryKey: ["asset-ops", assetId],
+    queryFn: async () => {
+      if (!access || !assetId) throw new Error("Sem sessão");
+      const { data } = await api.authFetch<Op[]>(`/assets/${assetId}/ops`, access, refresh);
+      return data;
+    },
+    staleTime: STALE,
+    enabled: !!access && !!assetId,
+  });
+}
+
 export function useAssetMutations() {
   const qc = useQueryClient();
   const { access, refresh } = useAuth();
@@ -30,6 +44,9 @@ export function useAssetMutations() {
   };
   const inv = () => {
     qc.invalidateQueries({ queryKey: ["assets"] });
+    qc.invalidateQueries({ queryKey: ["asset-ops"] });
+    qc.invalidateQueries({ queryKey: ["position"] });
+    qc.invalidateQueries({ queryKey: ["returns"] });
     qc.invalidateQueries({ queryKey: ["txs"] });
   };
   return {
@@ -37,6 +54,10 @@ export function useAssetMutations() {
     remove: useMutation({ mutationFn: (id: number) => run((t) => api.assets.remove(id, t)), onSuccess: inv }),
     addOp: useMutation({
       mutationFn: (v: { id: number; body: OpBody }) => run((t) => api.assets.addOp(v.id, v.body, t)),
+      onSuccess: inv,
+    }),
+    delOp: useMutation({
+      mutationFn: (v: { id: number; opId: number }) => run((t) => api.assets.removeOp(v.id, v.opId, t)),
       onSuccess: inv,
     }),
     setPrice: useMutation({

@@ -227,6 +227,12 @@ async def test_pay_recorrente_e_unica(pac):
     assert r.status_code == 200 and all(t["id"] != txid for t in r.json()["data"])
     assert (await ac.get("/api/transactions", params={"source": "PIX"}, headers=h)).status_code == 422
 
+    # Fase 3: histórico robusto por payable_id (sem busca textual)
+    r = await ac.get("/api/transactions", params={"payable_id": pid, "per_page": 50}, headers=h)
+    assert r.status_code == 200 and [t["id"] for t in r.json()["data"]] == [txid]
+    r = await ac.get("/api/transactions", params={"payable_id": 999999, "per_page": 50}, headers=h)
+    assert r.status_code == 200 and r.json()["data"] == []
+
     # RECURRING atualiza estimativa ao pagar outro valor
     r = await ac.post(
         "/api/payables",
@@ -343,3 +349,32 @@ async def test_pay_isolamento(pac):
     assert (await ac.get("/api/payables", headers=h2)).json() == []
     assert (await ac.get(f"/api/payables/{pid}", headers=h2)).status_code == 404
     assert (await ac.post(f"/api/payables/{pid}/pay", json={"account_id": acc}, headers=h2)).status_code == 404
+
+
+async def test_delete_bloqueado_com_baixas(pac):
+    """2.5: payable com lançamentos gerados → 409; sem baixas → 204."""
+    ac, h = pac, await _user(pac, "del")
+    acc = await _account(ac, h)
+    r = await ac.post(
+        "/api/payables",
+        json={"description": "Net", "kind": "ONE_TIME", "amount": "100", "next_due": "2026-11-01"},
+        headers=h,
+    )
+    pid = r.json()["id"]
+    assert (await ac.delete(f"/api/payables/{pid}", headers=h)).status_code == 204
+
+    r = await ac.post(
+        "/api/payables",
+        json={"description": "Luz", "kind": "ONE_TIME", "amount": "180", "next_due": "2026-11-01"},
+        headers=h,
+    )
+    pid2 = r.json()["id"]
+    assert (await ac.post(f"/api/payables/{pid2}/pay", json={"account_id": acc}, headers=h)).status_code == 200
+    r = await ac.delete(f"/api/payables/{pid2}", headers=h)
+    assert r.status_code == 409, r.text
+
+    # escape: excluindo o lançamento gerado, a conta exclui
+    r = await ac.get("/api/transactions", params={"source": "PAYABLE", "per_page": 50}, headers=h)
+    txid = r.json()["data"][0]["id"]
+    assert (await ac.delete(f"/api/transactions/{txid}", headers=h)).status_code == 204
+    assert (await ac.delete(f"/api/payables/{pid2}", headers=h)).status_code == 204

@@ -110,6 +110,7 @@ async def list_items(
             verdict=r.verdict,
             payload=r.payload,
             matched_transaction_id=r.matched_transaction_id,
+            decision=r.decision,
         )
         for r in rows
     ]

@@ -69,12 +69,12 @@ export function AccountsPage() {
       {confirm.dialog}
       {msg && <p className="fw-error">{msg}</p>}
       <form onSubmit={onCreate} className="fw-row">
-        <input className="fw-input" style={{ width: "auto" }} placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="fw-input" style={{ width: "auto" }} placeholder="Banco" value={bank} onChange={(e) => setBank(e.target.value)} />
-        <select className="fw-select" style={{ width: "auto" }} value={type} onChange={(e) => setType(e.target.value)}>
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Nome da conta" placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Banco" placeholder="Banco" value={bank} onChange={(e) => setBank(e.target.value)} />
+        <select className="fw-select" style={{ width: "auto" }} aria-label="Tipo de conta" value={type} onChange={(e) => setType(e.target.value)}>
           {TYPES.map((t) => <option key={t} value={t}>{labelOf(accountTypeLabel, t)}</option>)}
         </select>
-        <input className="fw-input" style={{ width: "auto" }} placeholder="Saldo inicial" value={balance} onChange={(e) => setBalance(e.target.value)} />
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Saldo inicial em R$" placeholder="Saldo inicial" value={balance} onChange={(e) => setBalance(e.target.value)} />
         <Button type="submit">Criar</Button>
       </form>
       {isLoading && <p>Carregando...</p>}
@@ -84,7 +84,7 @@ export function AccountsPage() {
           <li className="fw-list-item" key={a.id}>
             {editing === a.id ? (
               <>
-                <input className="fw-input" style={{ width: "auto" }} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                <input className="fw-input" style={{ width: "auto" }} aria-label="Novo nome da conta" value={editName} onChange={(e) => setEditName(e.target.value)} />
                 <Button size="sm" onClick={() => onRename(a.id)}>Salvar</Button>
                 <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button>
               </>

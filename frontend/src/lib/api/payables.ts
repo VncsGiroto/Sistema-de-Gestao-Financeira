@@ -1,4 +1,5 @@
 import { request } from "./http";
+import type { TxPage } from "./transactions";
 
 export interface Payable {
   id: number;
@@ -68,4 +69,6 @@ export const payablesApi = {
     request<PayableScheduleItem[]>(`/payables/${id}/schedule`, {}, access),
   pay: (id: number, body: PayBody, access: string) =>
     request<PayResult>(`/payables/${id}/pay`, { method: "POST", body: JSON.stringify(body) }, access),
+  history: (id: number, access: string) =>
+    request<TxPage>(`/transactions?payable_id=${id}&per_page=100`, {}, access),
 };

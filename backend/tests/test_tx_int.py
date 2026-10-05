@@ -159,8 +159,42 @@ async def test_tx_filtros_paginacao_csv(tac):
     assert "MERCADO A" in r.text
 
 
+async def test_tx_bulk_categorize(tac):
+    """4.x: aplica em massa com compatibilidade; incompatíveis/inexistentes são contados."""
+    ac, h = tac, await _user(tac, "bulk")
+    acc, _, cat_exp, cat_inc = await _setup(ac, h)
+
+    async def mk(desc, amt, t, cat=None):
+        body = {"account_id": acc, "date": "2026-09-10", "description": desc, "amount": amt, "type": t}
+        if cat:
+            body["category_id"] = cat
+        r = await ac.post("/api/transactions", json=body, headers=h)
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    e1 = await mk("A", "10", "EXPENSE")
+    e2 = await mk("B", "20", "EXPENSE", cat_exp)
+    i1 = await mk("C", "30", "INCOME")
+
+    r = await ac.post(
+        "/api/transactions/categorize", json={"ids": [e1, e2, i1, 999999], "category_id": cat_exp}, headers=h
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"updated": 2, "skipped_type": 1, "skipped_missing": 1}
+
+    r = await ac.get(f"/api/transactions/{e1}", headers=h)
+    assert r.json()["category_id"] == cat_exp
+
+    # categoria de outro usuário → 404; sem ids → 422
+    _, hb = acc, await _user(tac, "bulk2")
+    r = await ac.post("/api/transactions/categorize", json={"ids": [e1], "category_id": cat_exp}, headers=hb)
+    assert r.status_code == 404
+    r = await ac.post("/api/transactions/categorize", json={"ids": [], "category_id": cat_exp}, headers=h)
+    assert r.status_code == 422
+
+
 async def test_tx_categoria_tipo_compativel(tac):
-    """0.2: categoria de tipo divergente → 422 no create e no PATCH (estado final)."""
+    """0.2: categoria de tipo divergente → 422 no create e no PATCH."""
     ac, h = tac, await _user(tac, "cat")
     acc, _, cat_exp, cat_inc = await _setup(ac, h)
 

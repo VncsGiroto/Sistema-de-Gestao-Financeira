@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../lib/auth-store";
 import { api } from "../../lib/api";
 import type { User } from "../../lib/api";
+import { Link } from "@tanstack/react-router";
 import { useAccounts } from "../finance/hooks";
+import { Badge } from "../../components/ui";
 import { CategoryPie, EvolutionChart } from "./charts";
 import { useCommitments, useDashboard } from "./hooks";
 import { brl } from "../../lib/money";
@@ -39,6 +41,14 @@ export function DashboardPage() {
   const [horizon, setHorizon] = useState(60);
   const { data: comm } = useCommitments(horizon, accountId ? Number(accountId) : undefined);
 
+  const prev = dash?.prev_month;
+  const varFmt = (cur: string | undefined, old: string | undefined) => {
+    if (cur == null || old == null) return "—";
+    const d = Number(cur) - Number(old);
+    if (Number(old) === 0) return d === 0 ? "—" : `${d > 0 ? "+" : ""}${d.toFixed(2)} (sem base anterior)`;
+    return `${d > 0 ? "+" : ""}${((d / Math.abs(Number(old))) * 100).toFixed(1)}% vs ${prev?.month}`;
+  };
+
   return (
     <>
       <div className="fw-page-head">
@@ -54,13 +64,40 @@ export function DashboardPage() {
           {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
       </div>
+      {accounts && accounts.length === 0 && (
+        <div className="fw-card" style={{ marginTop: 12 }}>
+          <h2 style={{ marginTop: 0 }}>Comece por aqui</h2>
+          <ol>
+            <li><Link to="/app/accounts">Crie sua primeira conta</Link></li>
+            <li><Link to="/app/transactions">Lance uma movimentação</Link> ou <Link to="/app/imports">importe seu extrato OFX</Link></li>
+            <li><Link to="/app/categories">Organize as categorias</Link></li>
+            <li><Link to="/app/payables">Cadastre uma conta futura</Link></li>
+          </ol>
+        </div>
+      )}
       {dash && (
         <>
           <div className="fw-metrics">
             <div className="fw-metric"><strong>Saldo</strong><p>{brl(dash.balance)}</p></div>
-            <div className="fw-metric"><strong>Receitas</strong><p>{brl(dash.income.total)}</p></div>
-            <div className="fw-metric"><strong>Despesas</strong><p>{brl(dash.expense.total)}</p></div>
+            <div className="fw-metric"><strong>Receitas</strong><p>{brl(dash.income.total)}</p><small>{varFmt(dash.income.total, prev?.income)}</small></div>
+            <div className="fw-metric"><strong>Despesas</strong><p>{brl(dash.expense.total)}</p><small>{varFmt(dash.expense.total, prev?.expense)}</small></div>
           </div>
+          {(dash.uncategorized > 0) && (
+            <p>{dash.uncategorized} lançamento(s) sem categoria no período — categorize no extrato.</p>
+          )}
+          {(accounts ?? []).length > 0 && (
+            <div className="fw-card" style={{ marginBottom: 12 }}>
+              <h2 style={{ marginTop: 0 }}>Contas</h2>
+              <ul className="fw-list">
+                {(accounts ?? []).map((a) => (
+                  <li className="fw-list-item" key={a.id}>
+                    <span>{a.name} — Atual {brl(a.current_balance)}</span>
+                    {Number(a.current_balance) < 0 && <Badge tone="red">saldo negativo</Badge>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="fw-card" style={{ marginBottom: 12 }}>
             <EvolutionChart data={dash} />
           </div>
@@ -72,7 +109,7 @@ export function DashboardPage() {
       )}
       <section className="fw-card" style={{ marginTop: 16 }}>
         <h2>Compromissos futuros (projeção)</h2>
-        <p>Contas a vencer e parcelas dentro do horizonte. Não entram no realizado acima.</p>
+        <p>Saldo projetado = saldo atual − compromissos dentro do horizonte. Não entram no realizado acima.</p>
         <select className="fw-select" style={{ width: "auto" }} value={horizon} onChange={(e) => setHorizon(Number(e.target.value))} aria-label="Horizonte">
           <option value={30}>Próximos 30 dias</option>
           <option value={60}>Próximos 60 dias</option>

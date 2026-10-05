@@ -1,15 +1,29 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "../lib/auth-store";
 
-const ITEMS = [
-  { to: "/app", label: "Painel", icon: "◈" },
-  { to: "/app/accounts", label: "Contas", icon: "🏦" },
-  { to: "/app/categories", label: "Categorias", icon: "🏷" },
-  { to: "/app/transactions", label: "Movimentações", icon: "⇄" },
-  { to: "/app/imports", label: "Importações", icon: "📥" },
-  { to: "/app/payables", label: "Contas a pagar", icon: "🗓" },
-  { to: "/app/investments", label: "Investimentos", icon: "📈" },
-] as const;
+const SECTIONS: { title: string; items: { to: "/app" | "/app/accounts" | "/app/categories" | "/app/transactions" | "/app/imports" | "/app/payables" | "/app/investments"; label: string; icon: string }[] }[] = [
+  {
+    title: "Meu dinheiro",
+    items: [
+      { to: "/app", label: "Painel", icon: "◈" },
+      { to: "/app/accounts", label: "Contas", icon: "🏦" },
+      { to: "/app/transactions", label: "Movimentações", icon: "⇄" },
+      { to: "/app/imports", label: "Importações", icon: "📥" },
+    ],
+  },
+  {
+    title: "Planejamento",
+    items: [{ to: "/app/payables", label: "Contas a pagar", icon: "🗓" }],
+  },
+  {
+    title: "Patrimônio",
+    items: [{ to: "/app/investments", label: "Investimentos", icon: "📈" }],
+  },
+  {
+    title: "Configurações",
+    items: [{ to: "/app/categories", label: "Categorias", icon: "🏷" }],
+  },
+];
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -33,14 +47,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <div className="fw-nav-label">Menu</div>
-        {ITEMS.map((it) => {
-          const active = it.to === "/app" ? pathname === "/app" : pathname.startsWith(it.to);
-          return (
-            <Link key={it.to} to={it.to} className={`fw-nav-item${active ? " active" : ""}`}>
-              <span className="fw-nav-icon">{it.icon}</span> {it.label}
-            </Link>
-          );
-        })}
+        {SECTIONS.map((s) => (
+          <div key={s.title}>
+            <div className="fw-nav-label">{s.title}</div>
+            {s.items.map((it) => {
+              const active = it.to === "/app" ? pathname === "/app" : pathname.startsWith(it.to);
+              return (
+                <Link key={it.to} to={it.to} className={`fw-nav-item${active ? " active" : ""}`}>
+                  <span className="fw-nav-icon">{it.icon}</span> {it.label}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
         <div className="fw-nav-foot">
           <button className="fw-nav-item" onClick={() => navigate({ to: "/app/security" })}>
             <span className="fw-nav-icon">🔒</span> Trocar senha

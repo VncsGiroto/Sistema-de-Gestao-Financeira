@@ -7,6 +7,7 @@ import { useAuth } from "../../lib/auth-store";
 import { useAccounts, useCategories, useTxMutations, useTxs } from "./hooks";
 import { Button, PageHeader, useConfirm } from "../../components/ui";
 import { labelOf, txSourceLabel, txTypeLabel } from "../../lib/labels";
+import { todayISO } from "../../lib/date";
 
 export function TransactionsPage() {
   const { access, refresh } = useAuth();
@@ -45,7 +46,7 @@ export function TransactionsPage() {
   // form criar
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [date, setDate] = useState("2026-09-22");
+  const [date, setDate] = useState(todayISO);
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState("EXPENSE");
@@ -94,18 +95,18 @@ export function TransactionsPage() {
       {msg && <p className="fw-error">{msg}</p>}
 
       <form onSubmit={onCreate} className="fw-row">
-        <select className="fw-select" style={{ width: "auto" }} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+        <select className="fw-select" style={{ width: "auto" }} aria-label="Conta do lançamento" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
           <option value="">Conta...</option>
           {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <select className="fw-select" style={{ width: "auto" }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+        <select className="fw-select" style={{ width: "auto" }} aria-label="Categoria do lançamento" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
           <option value="">Sem categoria</option>
           {(categories ?? []).filter((c) => c.type === type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <input className="fw-input" style={{ width: "auto" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input className="fw-input" style={{ width: "auto" }} placeholder="Descrição" value={desc} onChange={(e) => setDesc(e.target.value)} />
-        <input className="fw-input" style={{ width: "auto" }} placeholder="Valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <select className="fw-select" style={{ width: "auto" }} value={type} onChange={(e) => setType(e.target.value)}>
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Data do lançamento" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Descrição" placeholder="Descrição" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Valor em R$" placeholder="Valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <select className="fw-select" style={{ width: "auto" }} aria-label="Tipo do lançamento" value={type} onChange={(e) => setType(e.target.value)}>
           <option value="EXPENSE">Despesa</option>
           <option value="INCOME">Receita</option>
         </select>
@@ -113,28 +114,28 @@ export function TransactionsPage() {
       </form>
 
       <div className="fw-row">
-        <input className="fw-input" style={{ width: "auto" }} type="date" value={f.from ?? ""} onChange={(e) => set("from", e.target.value || undefined)} />
-        <input className="fw-input" style={{ width: "auto" }} type="date" value={f.to ?? ""} onChange={(e) => set("to", e.target.value || undefined)} />
-        <select className="fw-select" style={{ width: "auto" }} value={f.account_id ?? ""} onChange={(e) => set("account_id", e.target.value ? Number(e.target.value) : undefined)}>
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Filtrar de" type="date" value={f.from ?? ""} onChange={(e) => set("from", e.target.value || undefined)} />
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Filtrar até" type="date" value={f.to ?? ""} onChange={(e) => set("to", e.target.value || undefined)} />
+        <select className="fw-select" style={{ width: "auto" }} aria-label="Filtrar por conta" value={f.account_id ?? ""} onChange={(e) => set("account_id", e.target.value ? Number(e.target.value) : undefined)}>
           <option value="">Todas as contas</option>
           {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <select className="fw-select" style={{ width: "auto" }} value={f.type ?? ""} onChange={(e) => set("type", e.target.value || undefined)}>
+        <select className="fw-select" style={{ width: "auto" }} aria-label="Filtrar por tipo" value={f.type ?? ""} onChange={(e) => set("type", e.target.value || undefined)}>
           <option value="">Tipo...</option>
           <option value="EXPENSE">Despesa</option>
           <option value="INCOME">Receita</option>
         </select>
-        <select className="fw-select" style={{ width: "auto" }} value={f.category_id ?? ""} onChange={(e) => set("category_id", e.target.value ? Number(e.target.value) : undefined)}>
+        <select className="fw-select" style={{ width: "auto" }} aria-label="Filtrar por categoria" value={f.category_id ?? ""} onChange={(e) => set("category_id", e.target.value ? Number(e.target.value) : undefined)}>
           <option value="">Todas as categorias</option>
           {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} ({labelOf(txTypeLabel, c.type)})</option>)}
         </select>
-        <select className="fw-select" style={{ width: "auto" }} value={f.source ?? ""} onChange={(e) => set("source", e.target.value || undefined)}>
+        <select className="fw-select" style={{ width: "auto" }} aria-label="Filtrar por origem" value={f.source ?? ""} onChange={(e) => set("source", e.target.value || undefined)}>
           <option value="">Todas as origens</option>
           {Object.entries(txSourceLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <input className="fw-input" style={{ width: "auto" }} placeholder="Valor mín." value={f.min ?? ""} onChange={(e) => set("min", e.target.value || undefined)} />
-        <input className="fw-input" style={{ width: "auto" }} placeholder="Valor máx." value={f.max ?? ""} onChange={(e) => set("max", e.target.value || undefined)} />
-        <input className="fw-input" style={{ width: "auto" }} placeholder="Buscar..." value={f.q ?? ""} onChange={(e) => set("q", e.target.value || undefined)} />
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Valor mínimo em R$" placeholder="Valor mín." value={f.min ?? ""} onChange={(e) => set("min", e.target.value || undefined)} />
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Valor máximo em R$" placeholder="Valor máx." value={f.max ?? ""} onChange={(e) => set("max", e.target.value || undefined)} />
+        <input className="fw-input" style={{ width: "auto" }} aria-label="Buscar na descrição" placeholder="Buscar..." value={f.q ?? ""} onChange={(e) => set("q", e.target.value || undefined)} />
         <Button variant="ghost" onClick={onExport}>Exportar CSV</Button>
       </div>
 

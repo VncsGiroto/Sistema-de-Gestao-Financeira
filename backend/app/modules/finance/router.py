@@ -13,6 +13,8 @@ from app.modules.finance.schemas import (
     AccountIn,
     AccountOut,
     AccountPatch,
+    BulkCategoryIn,
+    BulkCategoryOut,
     CategoryIn,
     CategoryOut,
     CategoryPatch,
@@ -170,11 +172,13 @@ def _filters(
     category_id: int | None = None,
     type: str | None = Query(default=None, pattern="^(INCOME|EXPENSE)$"),
     source: str | None = Query(default=None, pattern="^(MANUAL|OFX|IMPORT|PAYABLE)$"),
+    payable_id: int | None = None,
+    import_id: int | None = None,
     q: str | None = Query(default=None, max_length=200),
     min: Decimal | None = Query(default=None, alias="min"),
     max: Decimal | None = Query(default=None, alias="max"),
 ) -> repo.TxFilters:
-    return repo.TxFilters(from_, to, account_id, category_id, type, source, q, min, max)
+    return repo.TxFilters(from_, to, account_id, category_id, type, source, payable_id, import_id, q, min, max)
 
 
 @transactions.get("", response_model=TxPage)
@@ -207,6 +211,17 @@ async def create_tx(body: TxIn, session: AsyncSession = Depends(get_session), us
     except repo.CategoryMismatch as e:
         raise unprocessable(str(e))
     return _tx_out(row)
+
+
+@transactions.post("/categorize", response_model=BulkCategoryOut)
+async def bulk_categorize(
+    body: BulkCategoryIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
+):
+    try:
+        out = await repo.bulk_set_category(session, user.id, body.ids, body.category_id)
+    except LookupError:
+        raise not_found()
+    return BulkCategoryOut(**out)
 
 
 @transactions.get("/{tx_id}", response_model=TxOut)

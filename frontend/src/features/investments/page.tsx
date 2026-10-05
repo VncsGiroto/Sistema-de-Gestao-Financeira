@@ -4,10 +4,20 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "../../lib/api";
 import type { Asset, AssetBody, Position, Returns } from "../../lib/api";
 import { brl } from "../../lib/money";
+import { todayISO } from "../../lib/date";
+import {
+  assetClassLabel,
+  labelOf,
+  opKindHelp,
+  opKindLabel,
+  priceSourceLabel,
+  rateTypeHelp,
+  rateTypeLabel,
+} from "../../lib/labels";
 import { Badge, Button, PageHeader, useConfirm } from "../../components/ui";
 import { useAuth } from "../../lib/auth-store";
 import { useAccounts } from "../finance/hooks";
-import { useAssetMutations, useAssets } from "./hooks";
+import { useAssetMutations, useAssets, useOps } from "./hooks";
 
 const CLASSES = [
   "RENDA_FIXA",
@@ -27,14 +37,16 @@ function AssetDetail({ asset }: { asset: Asset }) {
   const { access, refresh } = useAuth();
   const { data: accounts } = useAccounts();
   const m = useAssetMutations();
+  const { data: ops } = useOps(asset.id);
+  const confirm = useConfirm();
   const [msg, setMsg] = useState("");
   const [kind, setKind] = useState("APORTE");
-  const [date, setDate] = useState("2026-09-28");
+  const [date, setDate] = useState(todayISO);
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState("");
-  const [mdate, setMdate] = useState("2026-09-28");
+  const [mdate, setMdate] = useState(todayISO);
   const [mprice, setMprice] = useState("");
 
   const isRendimento = kind === "RENDIMENTO";
@@ -124,8 +136,26 @@ function AssetDetail({ asset }: { asset: Asset }) {
     }
   }
 
+  async function onDelOp(opId: number, kind: string) {
+    setMsg("");
+    const ok = await confirm.ask({
+      title: "Excluir operação?",
+      body: kind === "RENDIMENTO"
+        ? "A operação e a receita espelhada no extrato serão removidas."
+        : "A operação será removida e a posição recalculada.",
+      confirmLabel: "Excluir operação",
+    });
+    if (!ok) return;
+    try {
+      await m.delOp.mutateAsync({ id: asset.id, opId });
+    } catch {
+      setMsg("Falha ao excluir operação.");
+    }
+  }
+
   return (
     <div>
+      {confirm.dialog}
       {pos && !hasOps && (
         <p>Lance um aporte abaixo para começar — a posição aparece aqui.</p>
       )}
@@ -138,7 +168,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
               {" "}
               · atual {brl(pos.current_value)}{" "}
               <Badge tone="blue">
-                {pos.price_source} {pos.price_as_of}
+                {labelOf(priceSourceLabel, pos.price_source)} {pos.price_as_of}
               </Badge>{" "}
               · P&L {brl(pos.pnl)} · {pct(pos.profitability)}
             </>
@@ -169,6 +199,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
       <form onSubmit={onOp} className="fw-row">
         <select
           className="fw-select"
+          aria-label="Tipo de operação"
           value={kind}
           onChange={(e) => setKind(e.target.value)}
         >
@@ -176,8 +207,10 @@ function AssetDetail({ asset }: { asset: Asset }) {
           <option value="RESGATE">Resgate (venda)</option>
           <option value="RENDIMENTO">Rendimento (vira receita)</option>
         </select>
+        <span>{opKindHelp[kind]}</span>
         <input
           className="fw-input"
+          aria-label="Data da operação"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
@@ -186,12 +219,14 @@ function AssetDetail({ asset }: { asset: Asset }) {
           <>
             <input
               className="fw-input"
+              aria-label="Quantidade (cotas/unidades)"
               placeholder="Quantidade"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
             />
             <input
               className="fw-input"
+              aria-label="Preço unitário em R$"
               placeholder="Preço"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
@@ -201,12 +236,14 @@ function AssetDetail({ asset }: { asset: Asset }) {
           <>
             <input
               className="fw-input"
+              aria-label="Valor do rendimento em R$ (vira receita no extrato)"
               placeholder="Valor (rendimento)"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
             <select
               className="fw-select"
+              aria-label="Conta de destino do rendimento"
               value={accountId}
               onChange={(e) => setAccountId(e.target.value)}
             >
@@ -221,15 +258,16 @@ function AssetDetail({ asset }: { asset: Asset }) {
         )}
         <Button size="sm">Lançar</Button>
       </form>
-      <form onSubmit={onPrice} className="fw-row">
-        <input
+      <form onSubmit={onPrice} className="fw-row">        <input
           className="fw-input"
+          aria-label="Data de referência do preço"
           type="date"
           value={mdate}
           onChange={(e) => setMdate(e.target.value)}
         />
         <input
           className="fw-input"
+          aria-label="Preço manual por unidade em R$"
           placeholder="Preço manual"
           value={mprice}
           onChange={(e) => setMprice(e.target.value)}
@@ -238,6 +276,19 @@ function AssetDetail({ asset }: { asset: Asset }) {
           Precificar
         </Button>
       </form>
+      <h4>Histórico de operações ({(ops ?? []).length})</h4>
+      {(ops ?? []).length === 0 && <p>Nenhuma operação lançada.</p>}
+      <ul className="fw-list">
+        {(ops ?? []).map((o) => (
+          <li className="fw-list-item" key={o.id}>
+            <span>
+              {o.date} — {labelOf(opKindLabel, o.kind)} — {o.quantity != null ? `${o.quantity} un. × ` : ""}{o.price != null ? brl(o.price) : brl(o.amount)}
+              {o.fees !== "0" && o.fees !== "0.00" ? ` (taxas ${brl(o.fees)})` : ""}
+            </span>
+            <Button size="sm" variant="danger" onClick={() => onDelOp(o.id, o.kind)}>Excluir</Button>
+          </li>
+        ))}
+      </ul>
       {msg && <p className="fw-error">{msg}</p>}
     </div>
   );
@@ -322,7 +373,7 @@ export function InvestmentsPage() {
         >
           {CLASSES.map((c) => (
             <option key={c} value={c}>
-              {c}
+              {labelOf(assetClassLabel, c)}
             </option>
           ))}
         </select>
@@ -342,20 +393,23 @@ export function InvestmentsPage() {
               <option value="">Sem contrato (preço manual)</option>
               {RATE_TYPES.map((r) => (
                 <option key={r} value={r}>
-                  {r}
+                  {labelOf(rateTypeLabel, r)}
                 </option>
               ))}
             </select>
+            {rateType && <span>{rateTypeHelp[rateType]}</span>}
             {rateType && (
               <>
                 <input
                   className="fw-input"
+                  aria-label={rateType === "CDI_PCT" ? "Percentual do CDI" : "Taxa anual em %"}
                   placeholder="Taxa (% CDI ou % a.a.)"
                   value={rate}
                   onChange={(e) => setRate(e.target.value)}
                 />
                 <input
                   className="fw-input"
+                  aria-label="Vencimento do contrato"
                   type="date"
                   value={maturity}
                   onChange={(e) => setMaturity(e.target.value)}
@@ -373,7 +427,7 @@ export function InvestmentsPage() {
           <option value="">Todas as classes</option>
           {CLASSES.map((c) => (
             <option key={c} value={c}>
-              {c}
+              {labelOf(assetClassLabel, c)}
             </option>
           ))}
         </select>
@@ -386,7 +440,7 @@ export function InvestmentsPage() {
         {(data ?? []).map((a) => (
           <li className="fw-list-item" key={a.id}>
             <span>
-              {a.ticker} <Badge>{a.asset_class}</Badge>
+              {a.ticker} <Badge>{labelOf(assetClassLabel, a.asset_class)}</Badge>
             </span>
             <span>
               <Button
@@ -399,7 +453,7 @@ export function InvestmentsPage() {
               <Button
                 size="sm"
                 variant="danger"
-                onClick={() => m.remove.mutateAsync(a.id)}
+                onClick={() => onDelete(a.id, a.ticker)}
               >
                 Excluir
               </Button>

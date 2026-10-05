@@ -1,6 +1,6 @@
 """Agregações do dashboard. Puro em cima de linhas já carregadas, exceto queries de escopo."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -105,9 +105,37 @@ async def get_dashboard(
             by_exp[name] = by_exp.get(name, Decimal("0")) + v
             evo.setdefault(m, {"income": Decimal("0"), "expense": Decimal("0")})["expense"] += v
 
+    # Mês anterior ao início da janela (base de comparação) + lançamentos sem categoria.
+    pm_start = _add_months(start_m, -1)
+    pm_end = start_m - timedelta(days=1)
+    pm_q = select(Transaction.type, Transaction.amount).where(
+        Transaction.user_id == user_id,
+        Transaction.date >= pm_start,
+        Transaction.date <= pm_end,
+    )
+    if account_id:
+        pm_q = pm_q.where(Transaction.account_id == account_id)
+    pm_income = pm_expense = Decimal("0")
+    for ttype, amount in (await session.execute(pm_q)).all():
+        if ttype == "INCOME":
+            pm_income += amount
+        else:
+            pm_expense += amount
+    uncat_q = select(Transaction.id).where(
+        Transaction.user_id == user_id,
+        Transaction.date >= start_m,
+        Transaction.date <= end,
+        Transaction.category_id.is_(None),
+    )
+    if account_id:
+        uncat_q = uncat_q.where(Transaction.account_id == account_id)
+    uncategorized = len((await session.execute(uncat_q)).all())
+
     return {
         "balance": initial + cum_income - cum_expense,
         "income": {"total": income, "by_category": [{"name": k, "total": v} for k, v in sorted(by_inc.items())]},
         "expense": {"total": expense, "by_category": [{"name": k, "total": v} for k, v in sorted(by_exp.items())]},
         "evolution": [{"month": m, "income": evo[m]["income"], "expense": evo[m]["expense"]} for m in sorted(evo)],
+        "prev_month": {"month": pm_start.strftime("%Y-%m"), "income": pm_income, "expense": pm_expense},
+        "uncategorized": uncategorized,
     }

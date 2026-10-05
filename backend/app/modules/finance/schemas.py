@@ -83,3 +83,14 @@ class PageMeta(BaseModel):
 class TxPage(BaseModel):
     data: list[TxOut]
     meta: PageMeta
+
+
+class BulkCategoryIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+    category_id: int
+
+
+class BulkCategoryOut(BaseModel):
+    updated: int
+    skipped_type: int
+    skipped_missing: int

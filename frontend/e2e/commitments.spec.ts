@@ -27,7 +27,7 @@ test("agenda: conta futura + parcela aparecem nos compromissos", async ({ page }
 
   await page.goto("/app");
   await expect(page.getByText(/compromissos futuros/i)).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(/internet agenda/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/internet agenda/i).first()).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/notebook agenda/i).first()).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(/saldo projetado/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/saldo projetado/i).first()).toBeVisible({ timeout: 15000 });
 });

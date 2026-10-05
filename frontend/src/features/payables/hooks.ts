@@ -22,8 +22,20 @@ export function usePayables(kind?: string, upcomingDays?: number) {
   });
 }
 
-export function usePayableSchedule(id: number | null) {
+export function usePayableHistory(id: number | null) {
   const { access, refresh } = useAuth();
+  return useQuery({
+    queryKey: ["payable-history", id],
+    queryFn: async () => {
+      if (!access || !id) throw new Error("Sem sessão");
+      return api.authed((t) => api.payables.history(id, t), access, refresh);
+    },
+    staleTime: STALE,
+    enabled: !!access && !!id,
+  });
+}
+
+export function usePayableSchedule(id: number | null) {  const { access, refresh } = useAuth();
   return useQuery({
     queryKey: ["payable-schedule", id],
     queryFn: async () => {

@@ -34,7 +34,9 @@ DELETE /api/transfers/{id} → 204 (reverte os dois lados; só TRANSFER avulsa)
 POST /api/assets {ticker, asset_class, subtype, account_id? (INVESTMENT), ...} → 201 (409 ticker duplicado na mesma conta)
 PATCH /api/assets/{id} {account_id?, ...} → 200 (conta deve ser INVESTMENT)
 POST /api/assets/{id}/ops {APORTE|RESGATE (exigem conta vinculada; movem caixa atomicamente)|RENDIMENTO (espelha INCOME)|REINVESTIMENTO (posição/custo, sem receita/caixa)}
-GET /api/portfolio → {cash, positions_value, total, patrimonio, aportes, reinvestimentos, resgates, rendimentos, net_invested, resultado, xirr, positions[], unpriced[], by_class[], by_account[], snapshots[], history_since}
+RF com contrato (CDI_PCT/PREFIXADO): ops em valor — `amount` obrigatório, `quantity`/`price` rejeitados; conversão pela cotação do contrato na data (1,0 sem posição); `full:true` no RESGATE liquida tudo (incompatível com `amount`); data futura → 422; caixa insuficiente → 422
+POST /api/assets/{id}/prices {date, price, override?} → manual bloqueado com contrato (só `override:true` → `MANUAL_OVERRIDE`)
+GET /api/portfolio → {cash, positions_value, total, patrimonio, aportes, reinvestimentos, resgates, rendimentos, net_invested (externo), resultado, xirr, twr, positions[], unpriced[], by_class[], by_account[], snapshots[], history_since}
 ```
 GET /api/transactions/export?format=csv&... (mesmos filtros)
 ```

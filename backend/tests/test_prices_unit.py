@@ -77,6 +77,26 @@ async def test_bcb_parse_mock():
     assert series == {date(2026, 9, 25): Decimal("0.0527")}
 
 
+async def test_bcb_payload_malformado():
+    """BCB instável: string ou linhas ruins viram erro tratável, nunca TypeError solto."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json="manutencao")
+
+    with pytest.raises(bcb.BcbError):
+        await bcb.cdi_range(
+            date(2026, 9, 25), date(2026, 9, 28), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        )
+
+    def handler2(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=["lixo", {"data": "25/09/2026", "valor": "0.05"}, None])
+
+    series = await bcb.cdi_range(
+        date(2026, 9, 25), date(2026, 9, 28), client=httpx.AsyncClient(transport=httpx.MockTransport(handler2))
+    )
+    assert series == {date(2026, 9, 25): Decimal("0.05")}
+
+
 async def test_bcb_erro_status():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={})

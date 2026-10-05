@@ -74,8 +74,8 @@ export function useAssetMutations() {
       onSuccess: inv,
     }),
     setPrice: useMutation({
-      mutationFn: (v: { id: number; date: string; price: string }) =>
-        run((t) => api.assets.setPrice(v.id, v.date, v.price, t)),
+      mutationFn: (v: { id: number; date: string; price: string; override?: boolean }) =>
+        run((t) => api.assets.setPrice(v.id, v.date, v.price, t, v.override)),
       onSuccess: inv,
     }),
   };

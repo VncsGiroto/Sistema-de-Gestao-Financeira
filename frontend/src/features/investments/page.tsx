@@ -51,6 +51,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
   const [mprice, setMprice] = useState("");
 
   const isRendimento = kind === "RENDIMENTO";
+  const contracted = asset.asset_class === "RENDA_FIXA" && (asset.rate_type === "CDI_PCT" || asset.rate_type === "PREFIXADO");
 
   const posQ = useQuery({
     queryKey: ["position", asset.id],
@@ -89,7 +90,9 @@ function AssetDetail({ asset }: { asset: Asset }) {
   async function onOp(ev: FormEvent) {
     ev.preventDefault();
     setMsg("");
-    if (!isRendimento && (!qty.trim() || !price.trim()))
+    if (contracted && (kind === "APORTE" || kind === "RESGATE" || kind === "REINVESTIMENTO") && !amount.trim())
+      return setMsg("Informe o valor em reais.");
+    if (!isRendimento && !contracted && (!qty.trim() || !price.trim()))
       return setMsg("Aporte/resgate exige quantidade e preço.");
     if (isRendimento && !amount.trim())
       return setMsg("Rendimento exige valor.");
@@ -101,11 +104,14 @@ function AssetDetail({ asset }: { asset: Asset }) {
         body: {
           kind,
           date,
-          ...(!isRendimento
+          ...(!isRendimento && !contracted
             ? { quantity: qty.trim(), price: price.trim() }
             : {}),
+          ...(isRendimento || contracted
+            ? { amount: amount.trim() }
+            : {}),
           ...(isRendimento
-            ? { amount: amount.trim(), account_id: Number(accountId) }
+            ? { account_id: Number(accountId) }
             : {}),
         },
       });
@@ -119,7 +125,24 @@ function AssetDetail({ asset }: { asset: Asset }) {
     }
   }
 
-  async function onPrice(ev: FormEvent) {
+  async function onFullRescue() {
+    setMsg("");
+    const ok = await confirm.ask({
+      title: "Resgatar tudo?",
+      body: `Toda a posição de ${asset.ticker} será liquidada pelo valor atual do contrato.`,
+      confirmLabel: "Resgatar tudo",
+    });
+    if (!ok) return;
+    try {
+      await m.addOp.mutateAsync({ id: asset.id, body: { kind: "RESGATE", date: todayISO(), full: true } });
+      posQ.refetch();
+      retQ.refetch();
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.message : "Falha ao resgatar.");
+    }
+  }
+
+  async function onPrice(ev: FormEvent, override = false) {
     ev.preventDefault();
     setMsg("");
     if (!mprice.trim()) return setMsg("Informe o preço.");
@@ -128,6 +151,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
         id: asset.id,
         date: mdate,
         price: mprice.trim(),
+        ...(override ? { override: true } : {}),
       });
       setMprice("");
       posQ.refetch();
@@ -160,7 +184,23 @@ function AssetDetail({ asset }: { asset: Asset }) {
       {pos && !hasOps && (
         <p>Lance um aporte abaixo para começar — a posição aparece aqui.</p>
       )}
-      {pos && hasOps && (
+      {pos && hasOps && contracted && (
+        <p>
+          Aplicado {brl(pos.invested)} · atual {pos.current_value != null ? brl(pos.current_value) : "—"}
+          {pos.current_value != null && (
+            <> · rendimento {brl(String(Number(pos.current_value) - Number(pos.invested)))}</>
+          )}
+          {pos.current_value != null && (
+            <>
+              {" "}
+              <Badge tone="blue">
+                {labelOf(priceSourceLabel, pos.price_source)} {pos.price_as_of}
+              </Badge>
+            </>
+          )}
+        </p>
+      )}
+      {pos && hasOps && !contracted && (
         <p>
           Qtd {pos.quantity} · médio {brl(pos.average_price)} · investido{" "}
           {brl(pos.invested)}
@@ -187,7 +227,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
       )}
       {ret && (ret.simple != null || ret.xirr != null || ret.twr != null) && (
         <p>
-          Simples {pct(ret.simple)} · XIRR {pct(ret.xirr)} · TWR {pct(ret.twr)}{" "}
+          Simples {pct(ret.simple)} · XIRR {pct(ret.xirr)} · <span title="Apreciação da cotação; exclui proventos reinvestidos">TWR de preço {pct(ret.twr)}</span>{" "}
           ({pct(ret.twr_annualized)} a.a.)
           {ret.benchmarks && (
             <>
@@ -220,7 +260,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
             onChange={(e) => setDate(e.target.value)}
           />
         </Field>
-        {!isRendimento ? (
+        {!isRendimento && !contracted ? (
           <>
             <Field label="Quantidade de cotas">
               <input
@@ -241,6 +281,16 @@ function AssetDetail({ asset }: { asset: Asset }) {
               />
             </Field>
           </>
+        ) : !isRendimento ? (
+          <Field label="Valor (R$)">
+            <input
+              className="fw-input"
+              style={{ width: "auto" }}
+              placeholder="0,00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </Field>
         ) : (
           <>
             <Field label="Valor do rendimento (R$)">
@@ -270,8 +320,13 @@ function AssetDetail({ asset }: { asset: Asset }) {
           </>
         )}
         <Button size="sm">Lançar</Button>
+        {contracted && kind === "RESGATE" && (
+          <Button size="sm" variant="danger" onClick={onFullRescue}>Resgatar tudo</Button>
+        )}
       </form>
-      <form onSubmit={onPrice} className="fw-row" style={{ alignItems: "flex-end" }}>
+      {(!contracted || (pos && pos.current_price == null)) && (
+      <form onSubmit={(e) => onPrice(e, contracted)} className="fw-row" style={{ alignItems: "flex-end" }}>
+        {contracted && <span>Contrato sem cotação — preço manual como exceção explícita.</span>}
         <Field label="Data de referência">
           <input
             className="fw-input"
@@ -281,7 +336,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
             onChange={(e) => setMdate(e.target.value)}
           />
         </Field>
-        <Field label="Preço manual (R$)">
+        <Field label={contracted ? "Preço de exceção (R$)" : "Preço manual (R$)"}>
           <input
             className="fw-input"
             style={{ width: "auto" }}
@@ -294,6 +349,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
           Precificar
         </Button>
       </form>
+      )}
       <h4>Histórico de operações ({(ops ?? []).length})</h4>
       {(ops ?? []).length === 0 && <p>Nenhuma operação lançada.</p>}
       <ul className="fw-list">
@@ -392,6 +448,7 @@ export function InvestmentsPage() {
             <div className="fw-metric">
               <strong>Resultado</strong><p>{brl(pf.resultado)}</p>
               <small title="Taxa interna de retorno anualizada dos aportes, resgates e rendimentos (reinvestimento é fluxo interno e não entra)">XIRR {pf.xirr != null ? `${(Number(pf.xirr) * 100).toFixed(2)}% a.a.` : "—"} ⓘ</small>
+              <small title="Apreciação da cotação da carteira; exclui proventos reinvestidos"> · TWR de preço {pf.twr != null ? `${(Number(pf.twr) * 100).toFixed(2)}%` : "—"}</small>
             </div>
           </div>
           <p>Aportes {brl(pf.aportes)} · reinvestido {brl(pf.reinvestimentos)} · resgates {brl(pf.resgates)} · rendimentos {brl(pf.rendimentos)} · investido líquido {brl(pf.net_invested)}</p>

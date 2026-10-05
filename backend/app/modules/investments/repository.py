@@ -103,6 +103,16 @@ async def list_ops(session: AsyncSession, user_id: int, asset_id: int) -> list[I
     return list(res.scalars().all())
 
 
+async def _contract_quote_or_raise(session: AsyncSession, asset, on) -> Decimal:
+    """Cotação do contrato na data da operação (1,0 sem posição anterior). Sem cotação → 422."""
+    from app.modules.market.prices import contract_quote
+
+    q = await contract_quote(session, asset, on)
+    if q is None:
+        raise ValueError("Sem cotação do contrato na data da operação")
+    return q
+
+
 async def add_op(
     session: AsyncSession,
     user_id: int,
@@ -115,12 +125,48 @@ async def add_op(
     amount,
     account_id: int | None = None,
     category_id: int | None = None,
+    full: bool = False,
 ) -> InvestmentOp:
+    from datetime import date as today_fn
+
     from app.modules.finance.models import Account, Transaction
+    from app.modules.investments import portfolio as pf
 
     asset = await get_asset(session, user_id, asset_id)
     if asset is None:
         raise LookupError("asset")
+    contracted = asset.asset_class == "RENDA_FIXA" and asset.rate_type in ("CDI_PCT", "PREFIXADO")
+    if kind == "REINVESTIMENTO" and fees != 0:
+        raise ValueError("REINVESTIMENTO não aceita taxas")
+    if full and (kind != "RESGATE" or not contracted):
+        raise ValueError("Resgate total só para renda fixa com contrato")
+    if contracted and on > today_fn.today():
+        raise ValueError("Operação futura sem cotação do contrato")
+    if kind in ("APORTE", "RESGATE", "REINVESTIMENTO") and contracted:
+        # Modo valor (R$): a UI nunca envia quantidade/preço; conversão interna pela cotação.
+        if quantity is not None or price is not None:
+            raise ValueError("Informe apenas o valor em reais")
+        if kind == "RESGATE" and full:
+            if amount is not None:
+                raise ValueError("Resgate total não combina com amount")
+            pos0 = await get_position(session, user_id, asset_id)
+            if pos0["quantity"] <= 0:
+                raise ValueError("Posição zerada")
+            quote0 = await _contract_quote_or_raise(session, asset, on)
+            quantity, price = pos0["quantity"], quote0
+            amount = (quantity * quote0).quantize(Decimal("0.01"))
+        else:
+            if amount is None or amount <= 0:
+                raise ValueError("Informe o valor em reais")
+            quote = await _contract_quote_or_raise(session, asset, on)
+            quantity = (Decimal(amount) / quote).quantize(Decimal("0.00000001"))
+            price = quote
+            amount = (quantity * quote).quantize(Decimal("0.01"))
+            if kind == "RESGATE":
+                pos = await get_position(session, user_id, asset_id)
+                if quantity > pos["quantity"]:
+                    quantity, price = pos["quantity"], quote
+                    amount = (quantity * quote).quantize(Decimal("0.01"))
     if kind in ("APORTE", "RESGATE"):
         if quantity is None or price is None:
             raise ValueError("APORTE/RESGATE exigem quantity e price")
@@ -136,6 +182,27 @@ async def add_op(
             amount = computed
         else:
             amount = computed
+        # Lock pessimista + caixa suficiente (concorrência real no PostgreSQL).
+        acc_res = await session.execute(
+            select(Account).where(Account.id == asset.account_id, Account.user_id == user_id).with_for_update()
+        )
+        if acc_res.scalar_one_or_none() is None:
+            raise LookupError("account")
+        if kind == "APORTE":
+            from app.modules.finance import repository as finance_repo
+
+            bal = await finance_repo.account_summaries(session, user_id)
+            s = bal.get(asset.account_id, {})
+            acc_row = await finance_repo.get_account(session, user_id, asset.account_id)
+            cur = (
+                (acc_row.initial_balance if acc_row else Decimal("0"))
+                + s.get("income", Decimal("0"))
+                - s.get("expense", Decimal("0"))
+                + s.get("ledger_in", Decimal("0"))
+                - s.get("ledger_out", Decimal("0"))
+            )
+            if cur < amount:
+                raise ValueError("Caixa insuficiente na conta para o aporte")
     elif kind == "REINVESTIMENTO":
         # Fluxo interno: soma posição e custo, sem receita no extrato e sem caixa.
         if quantity is None or price is None:
@@ -198,6 +265,7 @@ async def add_op(
         session.add(tx)
         await session.flush()
         row.transaction_id = tx.id
+    await pf.upsert_snapshot(session, user_id, on)
     await session.commit()
     await session.refresh(row)
     return row
@@ -219,6 +287,10 @@ async def delete_op(session: AsyncSession, user_id: int, asset_id: int, op_id: i
         if tx is not None and tx.user_id == user_id:
             await session.delete(tx)
     await session.delete(row)
+    await session.flush()
+    from app.modules.investments import portfolio as pf
+
+    await pf.upsert_snapshot(session, user_id)
     await session.commit()
     return True
 
@@ -237,19 +309,29 @@ def validate_rate(asset_class: str, rate_type: str | None, rate) -> None:
         raise ValueError("rate exige rate_type")
 
 
-async def set_manual_price(session: AsyncSession, user_id: int, asset_id: int, on, price) -> dict:
+async def set_manual_price(
+    session: AsyncSession, user_id: int, asset_id: int, on, price, override: bool = False
+) -> dict:
+    from app.modules.investments import portfolio as pf
+
     asset = await get_asset(session, user_id, asset_id)
     if asset is None:
         raise LookupError("asset")
+    contracted = asset.asset_class == "RENDA_FIXA" and asset.rate_type in ("CDI_PCT", "PREFIXADO")
+    source = "MANUAL_OVERRIDE" if (contracted and override) else "MANUAL"
+    if contracted and not override:
+        raise ValueError("RF com contrato usa a cotação do contrato; preço manual só como exceção explícita")
     res = await session.execute(
-        select(AssetPrice).where(AssetPrice.asset_id == asset_id, AssetPrice.date == on, AssetPrice.source == "MANUAL")
+        select(AssetPrice).where(AssetPrice.asset_id == asset_id, AssetPrice.date == on, AssetPrice.source == source)
     )
     row = res.scalar_one_or_none()
     if row is None:
-        row = AssetPrice(user_id=user_id, asset_id=asset_id, date=on, price=price, source="MANUAL")
+        row = AssetPrice(user_id=user_id, asset_id=asset_id, date=on, price=price, source=source)
         session.add(row)
     else:
         row.price = price
+    await session.flush()
+    await pf.upsert_snapshot(session, user_id, on)
     await session.commit()
     await session.refresh(row)
     return {"id": row.id, "date": row.date, "price": row.price, "source": row.source}
@@ -336,9 +418,10 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
             twr_ann = ret.annualize(twr, (end - start).days)
 
     simple = None
-    cost = pos["aportes"] + pos["reinvestimentos"]
-    if cost > 0 and cur_value is not None:
-        simple = (cur_value + pos["resgates"] + pos["rendimentos"] - cost) / cost
+    external = pos["aportes"] - pos["resgates"]
+    if external > 0 and cur_value is not None:
+        # Retorno sobre capital externo (reinvest é ganho, não capital).
+        simple = (cur_value + pos["resgates"] + pos["rendimentos"] - pos["aportes"]) / external
 
     benchmarks = {
         "cdi": await bench.cdi_return(start, end),

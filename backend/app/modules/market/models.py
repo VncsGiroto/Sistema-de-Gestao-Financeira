@@ -10,7 +10,7 @@ from app.core.db import Base
 class AssetPrice(Base):
     __tablename__ = "asset_prices"
     __table_args__ = (
-        CheckConstraint("source IN ('BRAPI','MANUAL','ACCRUAL')", name="ck_price_source"),
+        CheckConstraint("source IN ('BRAPI','MANUAL','ACCRUAL','MANUAL_OVERRIDE')", name="ck_price_source"),
         UniqueConstraint("asset_id", "date", "source", name="uq_price_asset_date_source"),
     )
 

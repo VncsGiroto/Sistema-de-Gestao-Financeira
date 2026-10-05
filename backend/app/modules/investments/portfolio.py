@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.finance import repository as finance_repo
+from app.modules.finance.models import Transaction
 from app.modules.investments import repository as inv_repo
 from app.modules.investments import returns as ret
 from app.modules.investments.models import PortfolioSnapshot
+from app.modules.ledger.models import LedgerMovement
 from app.modules.market.prices import resolve_price
 
 
@@ -35,7 +37,6 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
     positions: list = []
     by_class: dict[str, Decimal] = {}
     aportes = reinvest = resgates = rendimentos = Decimal("0")
-    flows: list[tuple[date, Decimal]] = []
     unpriced: list[str] = []
     for asset in assets:
         pos = await inv_repo.get_position(session, user_id, asset.id)
@@ -43,13 +44,10 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
         reinvest += pos["reinvestimentos"]
         resgates += pos["resgates"]
         rendimentos += pos["rendimentos"]
-        ops = await inv_repo.list_ops(session, user_id, asset.id)
-        for o in ops:
-            if o.kind == "REINVESTIMENTO":
-                continue
-            amt = Decimal(o.amount)
-            flows.append((o.date, -amt if o.kind == "APORTE" else amt))
-        cur = await resolve_price(session, asset, ref)
+        try:
+            cur = await resolve_price(session, asset, ref)
+        except Exception:
+            cur = None  # fail-open: preço nunca quebra a consolidação (vira sem-cotação)
         value = (cur.price * pos["quantity"]).quantize(Decimal("0.01")) if cur and pos["quantity"] > 0 else None
         if value is None:
             if pos["quantity"] > 0:
@@ -75,18 +73,51 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
     positions_value = sum((p["value"] for p in positions if p["value"] is not None), Decimal("0"))
     total = cash + positions_value
     patrimonio = patrimonio_cash + positions_value
-    net_invested = aportes + reinvest - resgates
-    resultado = total - net_invested
-    if positions_value > 0:
-        flows.append((ref, positions_value))
-    xirr = ret.xirr(flows)
 
+    # Fluxos externos à boundary INVESTMENT (+entra, −sai): transferências que cruzam a
+    # boundary e INCOME/EXPENSE direto em conta INVESTMENT. Operações internas (aporte da
+    # corretora p/ o ativo etc.) não aparecem aqui.
+    inv_ids = {a.id for a in accounts if a.account_type == "INVESTMENT"}
+    ext: list[tuple[date, Decimal]] = []
+    if inv_ids:
+        led = await session.execute(
+            select(LedgerMovement).where(LedgerMovement.user_id == user_id, LedgerMovement.kind == "TRANSFER")
+        )
+        for m in led.scalars().all():
+            if m.to_account_id in inv_ids and m.from_account_id not in inv_ids:
+                ext.append((m.date, Decimal(m.amount)))
+            elif m.from_account_id in inv_ids and m.to_account_id not in inv_ids:
+                ext.append((m.date, -Decimal(m.amount)))
+        txs = await session.execute(
+            select(Transaction).where(Transaction.user_id == user_id, Transaction.account_id.in_(inv_ids))
+        )
+        for t in txs.scalars().all():
+            ext.append((t.date, Decimal(t.amount) if t.type == "INCOME" else -Decimal(t.amount)))
+    ext_in = sum((a for _, a in ext if a > 0), Decimal("0"))
+    ext_out = -sum((a for _, a in ext if a < 0), Decimal("0"))
+    net_invested = ext_in - ext_out
+    resultado = total + ext_out - ext_in
+
+    xirr_flows = [(d, -a) for d, a in ext]
+    if total > 0:
+        xirr_flows.append((ref, total))
+    xirr = ret.xirr(xirr_flows)
+
+    # TWR da carteira: unitiza a série de snapshots com fluxos alocados no primeiro
+    # snapshot na data ou após cada fluxo (aproximação documentada e esparsa).
     snaps = await session.execute(
         select(PortfolioSnapshot).where(PortfolioSnapshot.user_id == user_id).order_by(PortfolioSnapshot.date)
     )
+    snap_rows = list(snaps.scalars().all())
+    twr = None
+    if len(snap_rows) >= 2:
+        events = [{"date": snap_rows[0].date, "flow": Decimal("0"), "value": Decimal(snap_rows[0].total)}]
+        for prev, snap in zip(snap_rows, snap_rows[1:]):
+            flow = sum((a for d, a in ext if prev.date < d <= snap.date), Decimal("0"))
+            events.append({"date": snap.date, "flow": flow, "value": Decimal(snap.total) - flow})
+        twr = ret.unitize(events)
     snapshots = [
-        {"date": s.date, "cash": s.cash, "positions_value": s.positions_value, "total": s.total}
-        for s in snaps.scalars().all()
+        {"date": s.date, "cash": s.cash, "positions_value": s.positions_value, "total": s.total} for s in snap_rows
     ]
     return {
         "cash": cash,
@@ -100,6 +131,7 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
         "net_invested": net_invested,
         "resultado": resultado,
         "xirr": xirr,
+        "twr": twr,
         "positions": positions,
         "unpriced": unpriced,
         "by_class": [{"name": k, "total": v} for k, v in sorted(by_class.items())],
@@ -112,8 +144,8 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
     }
 
 
-async def record_snapshot(session: AsyncSession, user_id: int, on: date | None = None) -> None:
-    """Upsert do snapshot do dia (último estado vence). Chamado sob evento."""
+async def upsert_snapshot(session: AsyncSession, user_id: int, on: date | None = None) -> None:
+    """Upsert do snapshot do dia com flush (sem commit: mesma transação do chamador)."""
     on = on or date.today()
     data = await compute_portfolio(session, user_id, on)
     res = await session.execute(
@@ -126,4 +158,10 @@ async def record_snapshot(session: AsyncSession, user_id: int, on: date | None =
     row.cash = data["cash"]
     row.positions_value = data["positions_value"]
     row.total = data["total"]
+    await session.flush()
+
+
+async def record_snapshot(session: AsyncSession, user_id: int, on: date | None = None) -> None:
+    """Upsert do snapshot do dia (último estado vence). Chamado sob evento."""
+    await upsert_snapshot(session, user_id, on)
     await session.commit()

@@ -181,12 +181,12 @@ async def add_op(
             body.amount,
             body.account_id,
             body.category_id,
+            body.full,
         )
     except LookupError:
         raise not_found()
     except ValueError as e:
         raise unprocessable(str(e))
-    await pf.record_snapshot(session, user.id)
     return _op_out(row)
 
 
@@ -198,7 +198,6 @@ async def delete_op(
         raise not_found()
     if not await repo.delete_op(session, user.id, asset_id, op_id):
         raise not_found()
-    await pf.record_snapshot(session, user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -231,16 +230,16 @@ async def get_position(asset_id: int, session: AsyncSession = Depends(get_sessio
     if pos["quantity"] > 0:
         q = await resolve_price(session, row, date.today())
         if q is not None:
-            cost = pos["aportes"] + pos["reinvestimentos"]
+            external = pos["aportes"] - pos["resgates"]
             value = (q.price * pos["quantity"]).quantize(Decimal("0.01"))
-            pnl = value + pos["resgates"] + pos["rendimentos"] - cost
+            pnl = value + pos["resgates"] + pos["rendimentos"] - pos["aportes"]
             out |= {
                 "current_price": q.price,
                 "price_source": q.source,
                 "price_as_of": q.as_of,
                 "current_value": value,
                 "pnl": pnl,
-                "profitability": (pnl / cost).quantize(Decimal("0.0001")) if cost > 0 else None,
+                "profitability": (pnl / external).quantize(Decimal("0.0001")) if external > 0 else None,
             }
     return PositionOut(**out)
 
@@ -250,10 +249,11 @@ async def set_price(
     asset_id: int, body: PriceIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)
 ):
     try:
-        out = await repo.set_manual_price(session, user.id, asset_id, body.date, body.price)
+        out = await repo.set_manual_price(session, user.id, asset_id, body.date, body.price, body.override)
     except LookupError:
         raise not_found()
-    await pf.record_snapshot(session, user.id)
+    except ValueError as e:
+        raise unprocessable(str(e))
     return PriceOut(**out)
 
 

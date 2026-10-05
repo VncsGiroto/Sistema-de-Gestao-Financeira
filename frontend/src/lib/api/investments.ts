@@ -49,6 +49,7 @@ export interface OpBody {
   amount?: string;
   account_id?: number;
   category_id?: number;
+  full?: boolean;
 }
 
 export interface Position {
@@ -93,6 +94,7 @@ export interface Portfolio {
   net_invested: string;
   resultado: string;
   xirr: string | null;
+  twr: string | null;
   positions: PortfolioPosition[];
   unpriced: string[];
   by_class: { name: string; total: string }[];
@@ -131,6 +133,6 @@ export const assetsApi = {
     request<Position>(`/assets/${id}/position`, {}, access),
   returns: (id: number, access: string) =>
     request<Returns>(`/assets/${id}/returns`, {}, access),
-  setPrice: (id: number, date: string, price: string, access: string) =>
-    request(`/assets/${id}/prices`, { method: "POST", body: JSON.stringify({ date, price }) }, access),
+  setPrice: (id: number, date: string, price: string, access: string, override?: boolean) =>
+    request(`/assets/${id}/prices`, { method: "POST", body: JSON.stringify({ date, price, ...(override ? { override: true } : {}) }) }, access),
 };

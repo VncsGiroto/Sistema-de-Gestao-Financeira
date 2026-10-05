@@ -16,11 +16,15 @@ def _br(d: date) -> str:
 
 def _parse(rows: list) -> dict:
     out = {}
+    if not isinstance(rows, list):
+        raise BcbError("Resposta inesperada do BCB")
     for r in rows:
         try:
+            if not isinstance(r, dict):
+                continue
             d = date(int(r["data"][6:10]), int(r["data"][3:5]), int(r["data"][0:2]))
             out[d] = Decimal(str(r["valor"]).replace(",", "."))
-        except (KeyError, ValueError, InvalidOperation, IndexError):
+        except (KeyError, ValueError, InvalidOperation, IndexError, TypeError, AttributeError):
             continue
     return out
 

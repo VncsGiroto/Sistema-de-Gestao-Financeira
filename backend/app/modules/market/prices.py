@@ -1,7 +1,7 @@
-"""Orquestra preço atual: ACCRUAL (RF contratada) → MANUAL.
+"""Orquestra preço atual: ACCRUAL (RF contratada) → MANUAL_OVERRIDE explícito → MANUAL.
 
-Persiste snapshot diário em asset_prices (ACCRUAL). Preço staleness é
-sinalizado via `as_of`.
+Sem commit interno: `_snapshot` só dá flush; o commit é do chamador (limite do repositório).
+Sem fallback silencioso: RF com contrato nunca usa MANUAL comum.
 """
 
 from abc import ABC, abstractmethod
@@ -20,7 +20,7 @@ from app.modules.market.models import AssetPrice
 
 class Price(BaseModel):
     price: Decimal
-    source: str  # ACCRUAL | MANUAL
+    source: str  # ACCRUAL | MANUAL | MANUAL_OVERRIDE
     as_of: date
 
 
@@ -42,12 +42,12 @@ class AccrualProvider(PriceProvider):
 
         res = await session.execute(
             select(InvestmentOp)
-            .where(InvestmentOp.asset_id == asset.id, InvestmentOp.user_id == asset.user_id)
+            .where(InvestmentOp.asset_id == asset.id, InvestmentOp.user_id == asset.user_id, InvestmentOp.date <= ref)
             .order_by(InvestmentOp.date, InvestmentOp.id)
         )
         lots: list[dict] = []
         for o in res.scalars().all():
-            if o.kind == "APORTE":
+            if o.kind in ("APORTE", "REINVESTIMENTO"):
                 if o.quantity is None or o.price is None:
                     return None
                 lots.append({"qty": o.quantity, "price": o.price, "date": o.date})
@@ -78,18 +78,21 @@ class AccrualProvider(PriceProvider):
 
 
 class ManualProvider(PriceProvider):
+    def __init__(self, sources: tuple[str, ...] = ("MANUAL",)) -> None:
+        self.sources = sources
+
     async def quote(self, asset: Asset, ref: date, session: AsyncSession | None = None) -> Price | None:
         assert session is not None, "ManualProvider.quote exige session"
         res = await session.execute(
             select(AssetPrice)
-            .where(AssetPrice.asset_id == asset.id, AssetPrice.date <= ref)
+            .where(AssetPrice.asset_id == asset.id, AssetPrice.date <= ref, AssetPrice.source.in_(self.sources))
             .order_by(AssetPrice.date.desc())
             .limit(1)
         )
         row = res.scalar_one_or_none()
         if row is None:
             return None
-        return Price(price=row.price, source="MANUAL", as_of=row.date)
+        return Price(price=row.price, source=row.source, as_of=row.date)
 
 
 async def _snapshot(session: AsyncSession, asset: Asset, ref: date, price: Price) -> None:
@@ -102,14 +105,41 @@ async def _snapshot(session: AsyncSession, asset: Asset, ref: date, price: Price
         session.add(
             AssetPrice(user_id=asset.user_id, asset_id=asset.id, date=ref, price=price.price, source=price.source)
         )
-        await session.commit()
+        await session.flush()
 
 
 async def resolve_price(session: AsyncSession, asset: Asset, ref: date) -> Price | None:
-    """ACCRUAL → MANUAL (fail-open: sem preço, retorna None)."""
-    if asset.asset_class == "RENDA_FIXA" and asset.rate_type in ("CDI_PCT", "PREFIXADO"):
+    """RF com contrato: só ACCRUAL ou override explícito. Demais: MANUAL. Sem fallback silencioso."""
+    contracted = asset.asset_class == "RENDA_FIXA" and asset.rate_type in ("CDI_PCT", "PREFIXADO")
+    if contracted:
         q = await AccrualProvider().quote(asset, ref, session)
         if q is not None:
             await _snapshot(session, asset, ref, q)
             return q
+        return await ManualProvider(("MANUAL_OVERRIDE",)).quote(asset, ref, session)
     return await ManualProvider().quote(asset, ref, session)
+
+
+async def contract_quote(session: AsyncSession, asset: Asset, ref: date) -> Decimal | None:
+    """Cotação unitária do contrato na data, para converter valor (R$) em quantidade.
+
+    Sem posição anterior (primeiro aporte ou pós-resgate total): 1,00000000.
+    None quando o accrual não consegue precificar (ex.: BCB fora).
+    """
+    from app.modules.investments.models import InvestmentOp
+    from app.modules.investments.position import position as calc_position
+
+    res = await session.execute(
+        select(InvestmentOp).where(
+            InvestmentOp.asset_id == asset.id, InvestmentOp.user_id == asset.user_id, InvestmentOp.date <= ref
+        )
+    )
+    ops = [
+        {"kind": o.kind, "quantity": o.quantity, "price": o.price, "fees": o.fees, "amount": o.amount}
+        for o in res.scalars().all()
+    ]
+    pos = calc_position(ops)
+    if pos["quantity"] <= 0:
+        return Decimal("1")
+    q = await AccrualProvider().quote(asset, ref, session)
+    return q.price if q is not None else None

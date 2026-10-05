@@ -50,9 +50,10 @@ class OpIn(BaseModel):
     quantity: Decimal | None = Field(default=None, gt=Decimal("0"))
     price: Decimal | None = Field(default=None, gt=Decimal("0"))
     fees: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
-    amount: Decimal | None = Field(default=None, gt=Decimal("0"))  # só RENDIMENTO informa
+    amount: Decimal | None = Field(default=None, gt=Decimal("0"))  # RENDIMENTO informa; RF com contrato opera em valor
     account_id: int | None = None  # RENDIMENTO: conta onde caiu (gera transação)
     category_id: int | None = None  # default: categoria do ativo
+    full: bool = False  # RESGATE em RF com contrato: liquida a posição inteira (ignora amount)
 
 
 class OpOut(BaseModel):
@@ -87,6 +88,7 @@ class PositionOut(BaseModel):
 class PriceIn(BaseModel):
     date: date_t
     price: Decimal = Field(gt=Decimal("0"))
+    override: bool = False  # exceção manual explícita p/ RF com contrato sem cotação
 
 
 class PriceOut(BaseModel):
@@ -156,6 +158,7 @@ class PortfolioOut(BaseModel):
     net_invested: Decimal
     resultado: Decimal
     xirr: Decimal | None = None
+    twr: Decimal | None = None
     positions: list[PortfolioPositionOut]
     unpriced: list[str]
     by_class: list[PortfolioSliceOut]

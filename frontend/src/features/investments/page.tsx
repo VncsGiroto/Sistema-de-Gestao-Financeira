@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "../../lib/api";
 import type { Asset, AssetBody, Position, Returns } from "../../lib/api";
+import { CategoryPie } from "../dashboard/charts";
 import { brl } from "../../lib/money";
 import { todayISO } from "../../lib/date";
 import {
@@ -17,7 +18,7 @@ import {
 import { Badge, Button, PageHeader, useConfirm } from "../../components/ui";
 import { useAuth } from "../../lib/auth-store";
 import { useAccounts } from "../finance/hooks";
-import { useAssetMutations, useAssets, useOps } from "./hooks";
+import { useAssetMutations, useAssets, useOps, usePortfolio } from "./hooks";
 
 const CLASSES = [
   "RENDA_FIXA",
@@ -297,16 +298,19 @@ function AssetDetail({ asset }: { asset: Asset }) {
 export function InvestmentsPage() {
   const [cls, setCls] = useState("");
   const { data, isLoading } = useAssets(cls || undefined);
+  const { data: pf } = usePortfolio();
   const m = useAssetMutations();
   const [msg, setMsg] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [ticker, setTicker] = useState("");
   const [aclass, setAclass] = useState("RENDA_VARIAVEL");
   const [subtype, setSubtype] = useState("ACAO");
+  const [accountId, setAccountId] = useState("");
   const [rateType, setRateType] = useState("");
   const [rate, setRate] = useState("");
   const [maturity, setMaturity] = useState("");
   const confirm = useConfirm();
+  const { data: accounts } = useAccounts();
 
   async function onDelete(id: number, ticker: string) {
     setMsg("");
@@ -335,6 +339,7 @@ export function InvestmentsPage() {
         asset_class: aclass,
         subtype,
       };
+      if (accountId) body.account_id = Number(accountId);
       if (isRF && rateType) {
         if (!rate.trim()) return setMsg("Contrato exige a taxa.");
         body.rate_type = rateType;
@@ -343,6 +348,7 @@ export function InvestmentsPage() {
       }
       await m.create.mutateAsync(body);
       setTicker("");
+      setAccountId("");
       setRateType("");
       setRate("");
       setMaturity("");
@@ -359,6 +365,35 @@ export function InvestmentsPage() {
       />
       {msg && <p className="fw-error">{msg}</p>}
       {confirm.dialog}
+      {pf && (
+        <>
+          <div className="fw-metrics">
+            <div className="fw-metric"><strong>Caixa nas corretoras</strong><p>{brl(pf.cash)}</p></div>
+            <div className="fw-metric"><strong>Posições</strong><p>{brl(pf.positions_value)}</p></div>
+            <div className="fw-metric"><strong>Total</strong><p>{brl(pf.total)}</p></div>
+            <div className="fw-metric"><strong>Resultado</strong><p>{brl(pf.resultado)}</p><small>XIRR {pf.xirr != null ? `${(Number(pf.xirr) * 100).toFixed(2)}% a.a.` : "—"}</small></div>
+          </div>
+          <p>Aportes {brl(pf.aportes)} · reinvestido {brl(pf.reinvestimentos)} · resgates {brl(pf.resgates)} · rendimentos {brl(pf.rendimentos)} · investido líquido {brl(pf.net_invested)}</p>
+          {pf.unpriced.length > 0 && <p>Sem cotação: {pf.unpriced.join(", ")} — informe o preço manual no ativo.</p>}
+          {pf.by_class.length > 0 && (
+            <div className="fw-card" style={{ marginBottom: 12 }}>
+              <CategoryPie title="Por classe" items={pf.by_class.map((s) => ({ name: labelOf(assetClassLabel, s.name), total: s.total }))} />
+            </div>
+          )}
+          {pf.snapshots.length > 0 && (
+            <div className="fw-card" style={{ marginBottom: 12 }}>
+              <h2 style={{ marginTop: 0 }}>Evolução (desde {pf.history_since})</h2>
+              <ul className="fw-list">
+                {pf.snapshots.map((s) => (
+                  <li className="fw-list-item" key={s.date}>
+                    <span>{s.date} — caixa {brl(s.cash)} · posições {brl(s.positions_value)} · total {brl(s.total)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
       <form onSubmit={onCreate} className="fw-row">
         <input
           className="fw-input"
@@ -379,10 +414,24 @@ export function InvestmentsPage() {
         </select>
         <input
           className="fw-input"
+          aria-label="Subtipo do ativo"
           placeholder="Subtipo"
           value={subtype}
           onChange={(e) => setSubtype(e.target.value)}
         />
+        <select
+          className="fw-select"
+          aria-label="Conta da corretora (opcional)"
+          value={accountId}
+          onChange={(e) => setAccountId(e.target.value)}
+        >
+          <option value="">Sem conta vinculada</option>
+          {(accounts ?? []).filter((a) => a.account_type === "INVESTMENT").map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
         {isRF && (
           <>
             <select
@@ -440,7 +489,10 @@ export function InvestmentsPage() {
         {(data ?? []).map((a) => (
           <li className="fw-list-item" key={a.id}>
             <span>
-              {a.ticker} <Badge>{labelOf(assetClassLabel, a.asset_class)}</Badge>
+              {a.ticker} <Badge>{labelOf(assetClassLabel, a.asset_class)}</Badge>{" "}
+              {a.account_id
+                ? (accounts ?? []).find((c) => c.id === a.account_id)?.name ?? ""
+                : <Badge tone="amber">sem conta vinculada</Badge>}
             </span>
             <span>
               <Button

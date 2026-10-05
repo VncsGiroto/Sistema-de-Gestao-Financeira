@@ -7,6 +7,7 @@ import { useAccounts } from "../finance/hooks";
 import { Badge } from "../../components/ui";
 import { CategoryPie, EvolutionChart } from "./charts";
 import { useCommitments, useDashboard } from "./hooks";
+import { usePortfolio } from "../investments/hooks";
 import { brl } from "../../lib/money";
 
 export function DashboardPage() {
@@ -38,6 +39,7 @@ export function DashboardPage() {
     account_id: accountId ? Number(accountId) : undefined,
   });
   const { data: accounts } = useAccounts();
+  const { data: portfolio } = usePortfolio();
   const [horizon, setHorizon] = useState(60);
   const { data: comm } = useCommitments(horizon, accountId ? Number(accountId) : undefined);
 
@@ -81,6 +83,12 @@ export function DashboardPage() {
             <div className="fw-metric"><strong>Saldo</strong><p>{brl(dash.balance)}</p></div>
             <div className="fw-metric"><strong>Receitas</strong><p>{brl(dash.income.total)}</p><small>{varFmt(dash.income.total, prev?.income)}</small></div>
             <div className="fw-metric"><strong>Despesas</strong><p>{brl(dash.expense.total)}</p><small>{varFmt(dash.expense.total, prev?.expense)}</small></div>
+            {portfolio && (
+              <>
+                <div className="fw-metric"><strong>Patrimônio</strong><p>{brl(portfolio.patrimonio)}</p><small>caixa + investimentos</small></div>
+                <div className="fw-metric"><strong>Investido</strong><p>{brl(portfolio.total)}</p><small>fora de receita/despesa</small></div>
+              </>
+            )}
           </div>
           {(dash.uncategorized > 0) && (
             <p>{dash.uncategorized} lançamento(s) sem categoria no período — categorize no extrato.</p>

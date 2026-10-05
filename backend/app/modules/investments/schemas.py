@@ -12,6 +12,7 @@ class AssetIn(BaseModel):
     asset_class: str = Field(pattern="^(RENDA_FIXA|RENDA_VARIAVEL|FUNDOS|CRIPTO|OUTROS)$")
     subtype: str = Field(min_length=1, max_length=20)
     custodian: str | None = Field(default=None, max_length=80)
+    account_id: int | None = None  # conta INVESTMENT da corretora (vínculo de caixa)
     category_id: int | None = None
     rate_type: str | None = Field(default=None, pattern="^(CDI_PCT|PREFIXADO|IPCA_MAIS)$")
     rate: Decimal | None = Field(default=None, gt=Decimal("0"))
@@ -21,6 +22,7 @@ class AssetIn(BaseModel):
 class AssetPatch(BaseModel):
     name: str | None = Field(default=None, max_length=120)
     custodian: str | None = Field(default=None, max_length=80)
+    account_id: int | None = None
     category_id: int | None = None
     rate_type: str | None = Field(default=None, pattern="^(CDI_PCT|PREFIXADO|IPCA_MAIS)$")
     rate: Decimal | None = Field(default=None, gt=Decimal("0"))
@@ -34,6 +36,7 @@ class AssetOut(BaseModel):
     asset_class: str
     subtype: str
     custodian: str | None = None
+    account_id: int | None = None
     currency: str
     category_id: int | None = None
     rate_type: str | None = None
@@ -42,7 +45,7 @@ class AssetOut(BaseModel):
 
 
 class OpIn(BaseModel):
-    kind: str = Field(pattern="^(APORTE|RESGATE|RENDIMENTO)$")
+    kind: str = Field(pattern="^(APORTE|RESGATE|RENDIMENTO|REINVESTIMENTO)$")
     date: date_t
     quantity: Decimal | None = Field(default=None, gt=Decimal("0"))
     price: Decimal | None = Field(default=None, gt=Decimal("0"))
@@ -70,6 +73,7 @@ class PositionOut(BaseModel):
     average_price: Decimal
     invested: Decimal
     aportes: Decimal
+    reinvestimentos: Decimal
     resgates: Decimal
     rendimentos: Decimal
     current_price: Decimal | None = None
@@ -106,3 +110,55 @@ class ReturnsOut(BaseModel):
     twr: Decimal | None = None
     twr_annualized: Decimal | None = None
     benchmarks: BenchmarksOut = BenchmarksOut()
+
+
+class PortfolioPositionOut(BaseModel):
+    asset_id: int
+    ticker: str
+    asset_class: str
+    account_id: int | None = None
+    quantity: Decimal
+    average_price: Decimal
+    invested: Decimal
+    current_price: Decimal | None = None
+    price_source: str | None = None
+    value: Decimal | None = None
+
+
+class PortfolioSliceOut(BaseModel):
+    name: str
+    total: Decimal
+
+
+class PortfolioAccountOut(BaseModel):
+    account_id: int
+    name: str
+    cash: Decimal
+    value: Decimal
+
+
+class PortfolioSnapshotOut(BaseModel):
+    date: date_t
+    cash: Decimal
+    positions_value: Decimal
+    total: Decimal
+
+
+class PortfolioOut(BaseModel):
+    cash: Decimal
+    positions_value: Decimal
+    total: Decimal
+    patrimonio: Decimal
+    aportes: Decimal
+    reinvestimentos: Decimal
+    resgates: Decimal
+    rendimentos: Decimal
+    net_invested: Decimal
+    resultado: Decimal
+    xirr: Decimal | None = None
+    positions: list[PortfolioPositionOut]
+    unpriced: list[str]
+    by_class: list[PortfolioSliceOut]
+    by_account: list[PortfolioAccountOut]
+    snapshots: list[PortfolioSnapshotOut]
+    history_since: date_t | None = None

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_session
 from app.core.errors import http_error
 from app.modules.auth.deps import get_current_user
+from app.modules.investments import portfolio as pf
 from app.modules.investments import repository as repo
 from app.modules.investments.schemas import (
     AssetIn,
@@ -11,6 +12,7 @@ from app.modules.investments.schemas import (
     AssetPatch,
     OpIn,
     OpOut,
+    PortfolioOut,
     PositionOut,
     PriceIn,
     PriceOut,
@@ -18,6 +20,7 @@ from app.modules.investments.schemas import (
 )
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
+portfolio_router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
 not_found = lambda: http_error(status.HTTP_404_NOT_FOUND, "Not Found", "Recurso não encontrado")  # noqa: E731
 unprocessable = lambda d: http_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unprocessable", d)  # noqa: E731
@@ -31,6 +34,7 @@ def _asset_out(r) -> AssetOut:
         asset_class=r.asset_class,
         subtype=r.subtype,
         custodian=r.custodian,
+        account_id=r.account_id,
         currency=r.currency,
         category_id=r.category_id,
         rate_type=r.rate_type,
@@ -73,6 +77,7 @@ async def create_asset(body: AssetIn, session: AsyncSession = Depends(get_sessio
             body.asset_class,
             body.subtype,
             body.custodian,
+            body.account_id,
             body.category_id,
             body.rate_type,
             body.rate,
@@ -83,6 +88,11 @@ async def create_asset(body: AssetIn, session: AsyncSession = Depends(get_sessio
     except ValueError as e:
         raise unprocessable(str(e))
     return _asset_out(row)
+
+
+@portfolio_router.get("", response_model=PortfolioOut)
+async def get_portfolio(session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+    return PortfolioOut(**await pf.compute_portfolio(session, user.id))
 
 
 @router.get("/{asset_id}", response_model=AssetOut)
@@ -99,7 +109,7 @@ async def patch_asset(
 ):
     from sqlalchemy import select
 
-    from app.modules.finance.models import Category
+    from app.modules.finance.models import Account, Category
 
     row = await repo.get_asset(session, user.id, asset_id)
     if row is None:
@@ -111,6 +121,15 @@ async def patch_asset(
         )
         if res.scalar_one_or_none() is None:
             raise not_found()
+    if "account_id" in data and data["account_id"] is not None:
+        acc_res = await session.execute(
+            select(Account).where(Account.id == data["account_id"], Account.user_id == user.id),
+        )
+        acc = acc_res.scalar_one_or_none()
+        if acc is None:
+            raise not_found()
+        if acc.account_type != "INVESTMENT":
+            raise unprocessable("Conta vinculada deve ser do tipo Investimento")
     rate_type = data.get("rate_type", row.rate_type)
     rate = data.get("rate", row.rate)
     try:
@@ -167,6 +186,7 @@ async def add_op(
         raise not_found()
     except ValueError as e:
         raise unprocessable(str(e))
+    await pf.record_snapshot(session, user.id)
     return _op_out(row)
 
 
@@ -178,6 +198,7 @@ async def delete_op(
         raise not_found()
     if not await repo.delete_op(session, user.id, asset_id, op_id):
         raise not_found()
+    await pf.record_snapshot(session, user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -194,20 +215,32 @@ async def get_position(asset_id: int, session: AsyncSession = Depends(get_sessio
     pos = await repo.get_position(session, user.id, asset_id)
     out = {
         "asset_id": asset_id,
-        **{k: pos[k] for k in ("quantity", "average_price", "invested", "aportes", "resgates", "rendimentos")},
+        **{
+            k: pos[k]
+            for k in (
+                "quantity",
+                "average_price",
+                "invested",
+                "aportes",
+                "reinvestimentos",
+                "resgates",
+                "rendimentos",
+            )
+        },
     }
     if pos["quantity"] > 0:
         q = await resolve_price(session, row, date.today())
         if q is not None:
+            cost = pos["aportes"] + pos["reinvestimentos"]
             value = (q.price * pos["quantity"]).quantize(Decimal("0.01"))
-            pnl = value + pos["resgates"] + pos["rendimentos"] - pos["aportes"]
+            pnl = value + pos["resgates"] + pos["rendimentos"] - cost
             out |= {
                 "current_price": q.price,
                 "price_source": q.source,
                 "price_as_of": q.as_of,
                 "current_value": value,
                 "pnl": pnl,
-                "profitability": (pnl / pos["aportes"]).quantize(Decimal("0.0001")) if pos["aportes"] > 0 else None,
+                "profitability": (pnl / cost).quantize(Decimal("0.0001")) if cost > 0 else None,
             }
     return PositionOut(**out)
 
@@ -220,6 +253,7 @@ async def set_price(
         out = await repo.set_manual_price(session, user.id, asset_id, body.date, body.price)
     except LookupError:
         raise not_found()
+    await pf.record_snapshot(session, user.id)
     return PriceOut(**out)
 
 

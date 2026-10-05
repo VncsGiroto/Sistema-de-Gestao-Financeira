@@ -13,7 +13,7 @@ class Asset(Base):
         CheckConstraint(
             "asset_class IN ('RENDA_FIXA','RENDA_VARIAVEL','FUNDOS','CRIPTO','OUTROS')", name="ck_asset_class"
         ),
-        UniqueConstraint("user_id", "ticker", name="uq_assets_user_ticker"),
+        UniqueConstraint("user_id", "ticker", "account_id", name="uq_assets_user_ticker_account"),
     )
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -22,6 +22,7 @@ class Asset(Base):
     asset_class: Mapped[str] = mapped_column(String(20), nullable=False)
     subtype: Mapped[str] = mapped_column(String(20), nullable=False)
     custodian: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="BRL")
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     rate_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # CDI_PCT|PREFIXADO|IPCA_MAIS
@@ -34,7 +35,7 @@ class Asset(Base):
 class InvestmentOp(Base):
     __tablename__ = "investment_ops"
     __table_args__ = (
-        CheckConstraint("kind IN ('APORTE','RESGATE','RENDIMENTO')", name="ck_op_kind"),
+        CheckConstraint("kind IN ('APORTE','RESGATE','RENDIMENTO','REINVESTIMENTO')", name="ck_op_kind"),
         CheckConstraint("amount > 0", name="ck_op_amount"),
         CheckConstraint("fees >= 0", name="ck_op_fees"),
     )
@@ -51,4 +52,23 @@ class InvestmentOp(Base):
     transaction_id: Mapped[int | None] = mapped_column(
         ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class PortfolioSnapshot(Base):
+    """Valor consolidado da carteira (caixa de investimento + posições) por dia.
+
+    Gravado sob evento (op criada/excluída, preço manual). Série esparsa: o gráfico
+    mostra pontos reais com lacunas explícitas, sem interpolação.
+    """
+
+    __tablename__ = "portfolio_snapshots"
+    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_snap_user_date"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    cash: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    positions_value: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

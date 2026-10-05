@@ -31,16 +31,21 @@ def position(ops: list[dict]) -> dict:
     cost_qty = Decimal("0")  # qty em carteira com custo (p/ preço médio)
     cost_total = Decimal("0")  # custo total da qty em carteira (precisão total)
     aportes = Decimal("0")
+    reinvestimentos = Decimal("0")
     resgates = Decimal("0")
     rendimentos = Decimal("0")
     for o in ops:
         q = Decimal(o.get("quantity") or 0)
         amt = Decimal(o["amount"])
-        if o["kind"] == "APORTE":
+        if o["kind"] in ("APORTE", "REINVESTIMENTO"):
+            # REINVESTIMENTO é fluxo interno: soma posição e custo, sem receita nem caixa.
             qty += q
             cost_qty += q
             cost_total += amt
-            aportes += amt
+            if o["kind"] == "APORTE":
+                aportes += amt
+            else:
+                reinvestimentos += amt
         elif o["kind"] == "RESGATE":
             qty -= q
             if cost_qty > 0:
@@ -61,6 +66,7 @@ def position(ops: list[dict]) -> dict:
         "average_price": avg,
         "invested": _money(avg * qty),  # custo da posição atual pelo preço médio
         "aportes": _money(aportes),
+        "reinvestimentos": _money(reinvestimentos),
         "resgates": _money(resgates),
         "rendimentos": _money(rendimentos),
     }

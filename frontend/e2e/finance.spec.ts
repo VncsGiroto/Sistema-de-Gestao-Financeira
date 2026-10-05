@@ -44,4 +44,19 @@ test("finance: conta + categoria + lançamento + categoria inline", async ({ pag
   const row = page.locator("tbody tr", { hasText: "SUPERMERCADO E2E" }).first();
   await row.locator("select").selectOption({ label: catLabel });
   await expect(row.locator("select option:checked")).toHaveText(catLabel, { timeout: 15000 });
+
+  // transferência entre contas: debita uma, credita outra, sem virar receita/despesa
+  await page.goto("/app/accounts");
+  await page.getByPlaceholder("Nome").fill("Destino E2E");
+  await page.getByRole("button", { name: /^criar$/i }).click();
+  await expect(page.getByText(/destino e2e/i)).toBeVisible({ timeout: 15000 });
+  const fromRow = page.locator("li", { hasText: "Corrente E2E" }).first();
+  await fromRow.getByRole("button", { name: /^transferir$/i }).click();
+  await fromRow.locator("select").selectOption({ label: "Destino E2E" });
+  await fromRow.getByPlaceholder("Valor").fill("7.50");
+  await fromRow.getByRole("button", { name: /^enviar$/i }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: /^transferir$/i }).click();
+  await expect(fromRow.getByText(/atual R\$ 50\.00/i)).toBeVisible({ timeout: 15000 });
+  const toRow = page.locator("li", { has: page.locator("strong", { hasText: "Destino E2E" }) });
+  await expect(toRow.getByText(/atual R\$ 7\.50/i)).toBeVisible({ timeout: 15000 });
 });

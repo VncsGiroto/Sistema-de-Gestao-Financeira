@@ -7,6 +7,7 @@ export interface Asset {
   asset_class: string;
   subtype: string;
   custodian: string | null;
+  account_id: number | null;
   currency: string;
   category_id: number | null;
   rate_type: string | null;
@@ -20,6 +21,7 @@ export interface AssetBody {
   asset_class: string;
   subtype: string;
   custodian?: string;
+  account_id?: number;
   category_id?: number;
   rate_type?: string;
   rate?: string;
@@ -55,6 +57,7 @@ export interface Position {
   average_price: string;
   invested: string;
   aportes: string;
+  reinvestimentos: string;
   resgates: string;
   rendimentos: string;
   current_price: string | null;
@@ -63,6 +66,39 @@ export interface Position {
   current_value: string | null;
   pnl: string | null;
   profitability: string | null;
+}
+
+export interface PortfolioPosition {
+  asset_id: number;
+  ticker: string;
+  asset_class: string;
+  account_id: number | null;
+  quantity: string;
+  average_price: string;
+  invested: string;
+  current_price: string | null;
+  price_source: string | null;
+  value: string | null;
+}
+
+export interface Portfolio {
+  cash: string;
+  positions_value: string;
+  total: string;
+  patrimonio: string;
+  aportes: string;
+  reinvestimentos: string;
+  resgates: string;
+  rendimentos: string;
+  net_invested: string;
+  resultado: string;
+  xirr: string | null;
+  positions: PortfolioPosition[];
+  unpriced: string[];
+  by_class: { name: string; total: string }[];
+  by_account: { account_id: number; name: string; cash: string; value: string }[];
+  snapshots: { date: string; cash: string; positions_value: string; total: string }[];
+  history_since: string | null;
 }
 
 export interface Returns {

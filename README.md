@@ -68,7 +68,7 @@ infrastructure/nginx/  scripts/backup.sh  docs/  .github/workflows/
 
 ## Docs
 
-`SPEC-MVP.md` (escopo/stack) · `ARCHITECTURE.md` · `DATABASE.md` (DDL, cadeia 0001→0013) · `API.md` · `SECURITY.md` · `OFX-IMPORT.md` · `DEDUP.md` · `FRONTEND.md` · `TESTING.md` · `DEPLOY.md` (staging) · `BACKLOG.md`.
+`SPEC-MVP.md` (escopo/stack) · `ARCHITECTURE.md` · `DATABASE.md` (DDL, cadeia 0001→0015) · `API.md` · `SECURITY.md` · `OFX-IMPORT.md` · `DEDUP.md` · `FRONTEND.md` · `TESTING.md` · `DEPLOY.md` (staging) · `BACKLOG.md`.
 
 ## Roadmap
 

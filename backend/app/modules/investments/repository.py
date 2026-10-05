@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import conflict
-from app.modules.finance.models import Category
+from app.modules.finance.models import Account, Category
 from app.modules.investments.models import Asset, InvestmentOp
 from app.modules.investments.position import position as calc_position
 from app.modules.market.models import AssetPrice  # noqa: F401 — registra metadata p/ drop_all/create_all
@@ -17,6 +17,19 @@ async def _owned_category(session: AsyncSession, user_id: int, category_id: int 
         return None
     res = await session.execute(select(Category).where(Category.id == category_id, Category.user_id == user_id))
     return res.scalar_one_or_none()
+
+
+async def _owned_investment_account(session: AsyncSession, user_id: int, account_id: int | None):
+    """Conta do usuário E do tipo INVESTMENT; None passa (legado sem vínculo)."""
+    if account_id is None:
+        return None
+    res = await session.execute(select(Account).where(Account.id == account_id, Account.user_id == user_id))
+    acc = res.scalar_one_or_none()
+    if acc is None:
+        raise LookupError("account")
+    if acc.account_type != "INVESTMENT":
+        raise ValueError("Conta vinculada deve ser do tipo Investimento")
+    return acc
 
 
 async def list_assets(session: AsyncSession, user_id: int, asset_class: str | None = None) -> list[Asset]:
@@ -40,6 +53,7 @@ async def create_asset(
     asset_class: str,
     subtype: str,
     custodian: str | None,
+    account_id: int | None,
     category_id: int | None,
     rate_type: str | None = None,
     rate=None,
@@ -47,6 +61,7 @@ async def create_asset(
 ) -> Asset:
     if category_id is not None and await _owned_category(session, user_id, category_id) is None:
         raise LookupError("category")
+    await _owned_investment_account(session, user_id, account_id)
     validate_rate(asset_class, rate_type, rate)
     row = Asset(
         user_id=user_id,
@@ -55,6 +70,7 @@ async def create_asset(
         asset_class=asset_class,
         subtype=subtype.strip().upper(),
         custodian=custodian,
+        account_id=account_id,
         category_id=category_id,
         rate_type=rate_type,
         rate=rate,
@@ -65,7 +81,7 @@ async def create_asset(
         await session.commit()
     except IntegrityError:
         await session.rollback()
-        raise conflict("Ticker já cadastrado")
+        raise conflict("Ticker já cadastrado nesta conta")
     await session.refresh(row)
     return row
 
@@ -108,6 +124,8 @@ async def add_op(
     if kind in ("APORTE", "RESGATE"):
         if quantity is None or price is None:
             raise ValueError("APORTE/RESGATE exigem quantity e price")
+        if asset.account_id is None:
+            raise ValueError("Vincule uma conta de investimento ao ativo antes de aportar ou resgatar")
         computed = (quantity * price + fees) if kind == "APORTE" else (quantity * price - fees)
         if computed <= 0:
             raise ValueError("Valor da operação deve ser positivo")
@@ -115,6 +133,16 @@ async def add_op(
             pos = await get_position(session, user_id, asset_id)
             if quantity > pos["quantity"]:
                 raise ValueError("Quantidade maior que a posição")
+            amount = computed
+        else:
+            amount = computed
+    elif kind == "REINVESTIMENTO":
+        # Fluxo interno: soma posição e custo, sem receita no extrato e sem caixa.
+        if quantity is None or price is None:
+            raise ValueError("REINVESTIMENTO exige quantity e price")
+        computed = quantity * price + fees
+        if computed <= 0:
+            raise ValueError("Valor da operação deve ser positivo")
         amount = computed
     else:  # RENDIMENTO
         if amount is None or amount <= 0:
@@ -124,6 +152,24 @@ async def add_op(
     )
     session.add(row)
     await session.flush()
+    if kind in ("APORTE", "RESGATE"):
+        # Caixa da corretora na mesma transação de banco (atomicidade).
+        from app.modules.ledger.models import LedgerMovement
+
+        session.add(
+            LedgerMovement(
+                user_id=user_id,
+                from_account_id=asset.account_id if kind == "APORTE" else None,
+                to_account_id=asset.account_id if kind == "RESGATE" else None,
+                kind=kind,
+                amount=amount,
+                date=on,
+                description=f"{'Aporte' if kind == 'APORTE' else 'Resgate'} {asset.ticker}",
+                op_id=row.id,
+                asset_id=asset_id,
+            )
+        )
+        await session.flush()
     if kind == "RENDIMENTO":
         # espelha no extrato como INCOME rastreável (simétrico ao pay de payables)
         if account_id is None:
@@ -255,16 +301,19 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
     cur = await resolve_price(session, asset, end)
     cur_value = (cur.price * pos["quantity"]).quantize(Decimal("0.01")) if cur and pos["quantity"] > 0 else None
 
-    # XIRR: aportes −, resgates/rendimentos +, valor atual como fluxo final
+    # XIRR: aportes −, resgates/rendimentos +, REINVESTIMENTO excluído (fluxo interno),
+    # valor atual como fluxo final.
     flows = []
     for o in ops:
+        if o.kind == "REINVESTIMENTO":
+            continue
         amt = Decimal(o.amount)
         flows.append((o.date, -amt if o.kind == "APORTE" else amt))
     if cur_value is not None and cur_value > 0:
         flows.append((end, cur_value))
     xirr = ret.xirr(flows)
 
-    # TWR por cotas: value antes de cada fluxo + valor final
+    # TWR por cotas: value antes de cada fluxo + valor final. REINVESTIMENTO é aporte interno.
     events, qty, twr_ok = [], Decimal("0"), True
     for o in ops:
         p = price_at(o.date)
@@ -275,11 +324,10 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
         amt = Decimal(o.amount)
         flow = -amt if o.kind in ("RESGATE", "RENDIMENTO") else amt
         events.append({"date": o.date, "flow": flow, "value": value_before})
-        qty += (
-            Decimal(o.quantity or 0)
-            if o.kind == "APORTE"
-            else (-Decimal(o.quantity or 0) if o.kind == "RESGATE" else Decimal("0"))
-        )
+        if o.kind in ("APORTE", "REINVESTIMENTO"):
+            qty += Decimal(o.quantity or 0)
+        elif o.kind == "RESGATE":
+            qty -= Decimal(o.quantity or 0)
     twr = twr_ann = None
     if twr_ok and cur_value is not None:
         events.append({"date": end, "flow": Decimal("0"), "value": cur_value})
@@ -288,8 +336,9 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
             twr_ann = ret.annualize(twr, (end - start).days)
 
     simple = None
-    if pos["aportes"] > 0 and cur_value is not None:
-        simple = (cur_value + pos["resgates"] + pos["rendimentos"] - pos["aportes"]) / pos["aportes"]
+    cost = pos["aportes"] + pos["reinvestimentos"]
+    if cost > 0 and cur_value is not None:
+        simple = (cur_value + pos["resgates"] + pos["rendimentos"] - cost) / cost
 
     benchmarks = {
         "cdi": await bench.cdi_return(start, end),

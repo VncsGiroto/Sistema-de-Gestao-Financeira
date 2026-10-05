@@ -33,11 +33,18 @@ export function useAccounts() {
 export function useAccountMutations() {
   const qc = useQueryClient();
   const { run } = useAuthed();
-  const inv = () => qc.invalidateQueries({ queryKey: ["accounts"] });
+  const inv = () => {
+    qc.invalidateQueries({ queryKey: ["accounts"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+  };
   return {
     create: useMutation({ mutationFn: (b: { name: string; bank?: string; account_type: string; initial_balance?: string }) => run((t) => api.accounts.create(b, t)), onSuccess: inv }),
     patch: useMutation({ mutationFn: (v: { id: number; body: { name?: string; bank?: string } }) => run((t) => api.accounts.patch(v.id, v.body, t)), onSuccess: inv }),
     remove: useMutation({ mutationFn: (id: number) => run((t) => api.accounts.remove(id, t)), onSuccess: inv }),
+    transfer: useMutation({
+      mutationFn: (b: { from_account_id: number; to_account_id: number; amount: string }) => run((t) => api.transfers.create(b, t)),
+      onSuccess: inv,
+    }),
   };
 }
 

@@ -45,6 +45,125 @@ async def _user(ac: AsyncClient, tag: str):
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
+async def test_vinculo_conta_e_caixa(iac):
+    """Épico ii: ativo↔conta INVESTMENT; aporte/resgate movem caixa atomicamente; sem dupla contagem."""
+    ac, h = iac, await _user(iac, "vinculo")
+
+    async def account(name, type_="CHECKING", initial="0"):
+        r = await ac.post(
+            "/api/accounts", json={"name": name, "account_type": type_, "initial_balance": initial}, headers=h
+        )
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    cc = await account("Corrente", "CHECKING", "5000.00")
+    br1 = await account("Corretora A", "INVESTMENT", "0")
+    br2 = await account("Corretora B", "INVESTMENT", "0")
+
+    async def asset(ticker, account_id=None, **kw):
+        body = {"ticker": ticker, "asset_class": "RENDA_VARIAVEL", "subtype": "ACAO", "account_id": account_id}
+        body.update(kw)
+        r = await ac.post("/api/assets", json=body, headers=h)
+        return r
+
+    # vínculo exige conta INVESTMENT do usuário
+    assert (await asset("PETR4", cc)).status_code == 422
+    assert (await asset("PETR4", 999999)).status_code == 404
+    assert (await asset("PETR4", br1)).status_code == 201
+    # mesmo ticker em outra corretora OK; na mesma → 409
+    assert (await asset("PETR4", br2)).status_code == 201
+    assert (await asset("PETR4", br1)).status_code == 409
+    aid = (await asset("VALE3", br1)).json()["id"]
+
+    async def balance(acc_id):
+        return (await ac.get(f"/api/accounts/{acc_id}", headers=h)).json()["current_balance"]
+
+    # transfere para a corretora e aporta: caixa cai, posição sobe, patrimônio neutro
+    r = await ac.post(
+        "/api/transfers", json={"from_account_id": cc, "to_account_id": br1, "amount": "1000.00"}, headers=h
+    )
+    assert r.status_code == 201, r.text
+    r = await ac.post(
+        f"/api/assets/{aid}/ops",
+        json={"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100.00"},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    assert await balance(br1) == "0.00"
+    p = (await ac.get(f"/api/assets/{aid}/position", headers=h)).json()
+    from decimal import Decimal as D
+
+    assert D(p["quantity"]) == 10 and p["invested"] == "1000.00"
+
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    assert pf["cash"] == "0.00" and pf["aportes"] == "1000.00" and pf["total"] == "0.00"  # sem preço ainda
+    assert pf["history_since"] is not None  # snapshot sob evento
+
+    # preço manual → posição avaliada; patrimônio = caixa + posições, sem dupla contagem
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-02-01", "price": "110.00"}, headers=h)
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    assert pf["positions_value"] == "1100.00" and pf["total"] == "1100.00" and pf["resultado"] == "100.00"
+    assert pf["unpriced"] == [] and len(pf["snapshots"]) >= 1  # upsert por dia: eventos do mesmo dia colapsam
+
+    # resgate devolve o caixa
+    r = await ac.post(
+        f"/api/assets/{aid}/ops",
+        json={"kind": "RESGATE", "date": "2026-03-01", "quantity": "4", "price": "120.00"},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    assert await balance(br1) == "480.00"
+
+    # ativo sem conta: aporte bloqueado, posição segue calculável
+    r = await ac.post(
+        "/api/assets", json={"ticker": "LIVRE1", "asset_class": "RENDA_VARIAVEL", "subtype": "ACAO"}, headers=h
+    )
+    free = r.json()["id"]
+    assert free and r.json()["account_id"] is None
+    r = await ac.post(
+        f"/api/assets/{free}/ops",
+        json={"kind": "APORTE", "date": "2026-01-10", "quantity": "1", "price": "10.00"},
+        headers=h,
+    )
+    assert r.status_code == 422
+
+
+async def test_reinvestimento_sem_receita(iac):
+    """REINVESTIMENTO soma posição/custo, sem INCOME, sem caixa; XIRR o ignora."""
+    ac, h = iac, await _user(iac, "reinv")
+    r = await ac.post(
+        "/api/accounts",
+        json={"name": "Corretora", "account_type": "INVESTMENT", "initial_balance": "1000.00"},
+        headers=h,
+    )
+    br = r.json()["id"]
+    r = await ac.post(
+        "/api/assets",
+        json={"ticker": "FII11", "asset_class": "FUNDOS", "subtype": "FII", "account_id": br},
+        headers=h,
+    )
+    aid = r.json()["id"]
+
+    async def op(body):
+        r = await ac.post(f"/api/assets/{aid}/ops", json=body, headers=h)
+        assert r.status_code == 201, (body, r.text)
+        return r.json()
+
+    await op({"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100.00"})
+    assert (await ac.get(f"/api/accounts/{br}", headers=h)).json()["current_balance"] == "0.00"
+    await op({"kind": "REINVESTIMENTO", "date": "2026-02-10", "quantity": "1", "price": "100.00"})
+    # sem receita no extrato e sem mexer no caixa
+    r = await ac.get("/api/transactions", params={"type": "INCOME", "per_page": 50}, headers=h)
+    assert r.json()["meta"]["total"] == 0
+    assert (await ac.get(f"/api/accounts/{br}", headers=h)).json()["current_balance"] == "0.00"
+
+    p = (await ac.get(f"/api/assets/{aid}/position", headers=h)).json()
+    from decimal import Decimal as D
+
+    assert D(p["quantity"]) == 11 and p["invested"] == "1100.00" and p["reinvestimentos"] == "100.00"
+    assert p["aportes"] == "1000.00"
+
+
 async def test_rendimento_categoria_incompativel(iac):
     """0.2: rendimento espelha INCOME — categoria EXPENSE (explícita ou do ativo) → 422."""
     ac, h = iac, await _user(iac, "inccat")
@@ -70,7 +189,7 @@ async def test_rendimento_categoria_incompativel(iac):
 
 async def test_assets_ops_position(iac):
     ac, h = iac, await _user(iac, "inv")
-    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "CHECKING"}, headers=h)
+    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "INVESTMENT"}, headers=h)
     acc = r.json()["id"]
     r = await ac.post("/api/categories", json={"name": "Dividendos", "type": "INCOME"}, headers=h)
     div = r.json()["id"]
@@ -82,6 +201,7 @@ async def test_assets_ops_position(iac):
             "asset_class": "RENDA_VARIAVEL",
             "subtype": "ACAO",
             "custodian": "XP",
+            "account_id": acc,
             "category_id": div,
         },
         headers=h,
@@ -91,9 +211,11 @@ async def test_assets_ops_position(iac):
     assert asset["ticker"] == "PETR4"  # normalizado
     aid = asset["id"]
 
-    # ticker duplicado → 409
+    # ticker duplicado na mesma conta → 409
     r = await ac.post(
-        "/api/assets", json={"ticker": "PETR4", "asset_class": "RENDA_VARIAVEL", "subtype": "ACAO"}, headers=h
+        "/api/assets",
+        json={"ticker": "PETR4", "asset_class": "RENDA_VARIAVEL", "subtype": "ACAO", "account_id": acc},
+        headers=h,
     )
     assert r.status_code == 409
 
@@ -169,8 +291,12 @@ async def test_assets_isolamento(iac):
 
 async def test_manual_price_enriquece_position(iac):
     ac, h = iac, await _user(iac, "mn")
+    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "INVESTMENT"}, headers=h)
+    br = r.json()["id"]
     r = await ac.post(
-        "/api/assets", json={"ticker": "ACAO7", "asset_class": "RENDA_VARIAVEL", "subtype": "ACAO"}, headers=h
+        "/api/assets",
+        json={"ticker": "ACAO7", "asset_class": "RENDA_VARIAVEL", "subtype": "ACAO", "account_id": br},
+        headers=h,
     )
     aid = r.json()["id"]
     r = await ac.post(
@@ -220,9 +346,18 @@ async def test_rf_accrual_com_cdi_mockado(iac, monkeypatch):
     )
     assert r.status_code == 422
 
+    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "INVESTMENT"}, headers=h)
+    br = r.json()["id"]
     r = await ac.post(
         "/api/assets",
-        json={"ticker": "CDB7", "asset_class": "RENDA_FIXA", "subtype": "CDB", "rate_type": "CDI_PCT", "rate": "100"},
+        json={
+            "ticker": "CDB7",
+            "asset_class": "RENDA_FIXA",
+            "subtype": "CDB",
+            "rate_type": "CDI_PCT",
+            "rate": "100",
+            "account_id": br,
+        },
         headers=h,
     )
     assert r.status_code == 201, r.text
@@ -251,6 +386,7 @@ async def test_rf_accrual_com_cdi_mockado(iac, monkeypatch):
             "subtype": "LCI_LCA",
             "rate_type": "IPCA_MAIS",
             "rate": "6",
+            "account_id": br,
         },
         headers=h,
     )
@@ -280,9 +416,13 @@ async def test_returns_com_benchmarks_mockados(iac, monkeypatch):
     monkeypatch.setattr(bench, "ipca_return", fake_ipca)
 
     ac, h = iac, await _user(iac, "rt")
-    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "CHECKING"}, headers=h)
+    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "INVESTMENT"}, headers=h)
     rt_acc = r.json()["id"]
-    r = await ac.post("/api/assets", json={"ticker": "FUN7", "asset_class": "OUTROS", "subtype": "OUTRO"}, headers=h)
+    r = await ac.post(
+        "/api/assets",
+        json={"ticker": "FUN7", "asset_class": "OUTROS", "subtype": "OUTRO", "account_id": rt_acc},
+        headers=h,
+    )
     aid = r.json()["id"]
     for body in [
         {"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100"},

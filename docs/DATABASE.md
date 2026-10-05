@@ -59,6 +59,23 @@ CREATE INDEX ix_tx_user_date ON transactions (user_id, date DESC);
 CREATE INDEX ix_tx_acct_date_amt ON transactions (account_id, date, amount);
 CREATE INDEX ix_tx_category ON transactions (category_id);
 
+CREATE TABLE ledger_movements (   -- migration 0014: ledger canônico patrimonial
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  from_account_id BIGINT REFERENCES accounts(id) ON DELETE RESTRICT,  -- NULL = fora da posição / interno
+  to_account_id BIGINT REFERENCES accounts(id) ON DELETE RESTRICT,    -- NULL = para a posição / interno
+  kind VARCHAR(20) NOT NULL CHECK (kind IN ('TRANSFER','APORTE','RESGATE','REINVESTIMENTO')),
+  amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
+  date DATE NOT NULL,
+  description VARCHAR(500) NOT NULL DEFAULT 'Transferência',
+  op_id BIGINT UNIQUE REFERENCES investment_ops(id) ON DELETE CASCADE, -- 1 movimento por operação
+  asset_id BIGINT REFERENCES assets(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- TRANSFER: origem+destino, sem op. APORTE: conta→posição. RESGATE: posição→conta.
+-- REINVESTIMENTO: interno. Nunca toca income/expense; saldos derivam daqui + transactions.
+
 CREATE TABLE imports (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -141,7 +158,7 @@ CREATE TABLE audit_logs (
 
 ## 4. Migrations
 
-Cadeia validada em banco fresco: `0001_auth_core → 0002_password_resets → 0003_accounts_categories → 0004_transactions → 0005_imports → 0006_recurring_bills → 0007_installments → 0008_installments_timestamps → 0009_payables → 0010_investments → 0011_prices → 0012_account_types → 0013_tx_amount_positive` (0009 migra bills/installments e dropa as tabelas; 0012 converte `CREDIT_CARD` legado para `OTHER` e troca o `CHECK` para `CHECKING/SAVINGS/CASH/INVESTMENT/OTHER`; 0013 normaliza `transactions.amount` legado via `abs()` e aperta o `CHECK` para `amount > 0`; drift model×banco = zero).
+Cadeia validada em banco fresco: `0001_auth_core → 0002_password_resets → 0003_accounts_categories → 0004_transactions → 0005_imports → 0006_recurring_bills → 0007_installments → 0008_installments_timestamps → 0009_payables → 0010_investments → 0011_prices → 0012_account_types → 0013_tx_amount_positive → 0014_ledger_movements → 0015_asset_account` (0009 migra bills/installments e dropa as tabelas; 0012 converte `CREDIT_CARD` legado para `OTHER` e troca o `CHECK` para `CHECKING/SAVINGS/CASH/INVESTMENT/OTHER`; 0013 normaliza `transactions.amount` legado via `abs()` e aperta o `CHECK` para `amount > 0`; 0014 cria `ledger_movements` (ledger patrimonial, sem dados a migrar); 0015 vincula `assets.account_id`, troca a unicidade para `(user, ticker, conta)`, adiciona kind `REINVESTIMENTO` e cria `portfolio_snapshots`; drift model×banco = zero).
 
 Tabelas auxiliares: `password_resets` (recovery 1h, uso único) e `audit_logs(action,entity,entity_id,meta)`; `asset_prices(asset_id,date,price,source)` guarda histórico MANUAL/ACCRUAL (base do TWR).
 

@@ -141,6 +141,20 @@ def test_resgate_acima_da_posicao_zera_base():
     assert p["invested"] == Decimal("0")
 
 
+def test_reinvestimento_soma_custo_sem_receita():
+    p = position(
+        [
+            _op("APORTE", "10", "100", "0", "1000"),
+            _op("REINVESTIMENTO", "1", "100", "0", "100"),
+        ]
+    )
+    assert p["quantity"] == Decimal("11")
+    assert p["average_price"] == Decimal("100")
+    assert p["invested"] == Decimal("1100")
+    assert p["aportes"] == Decimal("1000") and p["reinvestimentos"] == Decimal("100")
+    assert p["rendimentos"] == Decimal("0")
+
+
 def test_vazio():
     p = position([])
     assert p["quantity"] == 0 and p["average_price"] == 0 and p["invested"] == 0

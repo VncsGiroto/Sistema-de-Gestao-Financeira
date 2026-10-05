@@ -18,6 +18,28 @@ export function AccountsPage() {
   const [msg, setMsg] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
+  const [transferId, setTransferId] = useState<number | null>(null);
+  const [transferTo, setTransferTo] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+
+  async function onTransfer(fromId: number, fromName: string) {
+    setMsg("");
+    if (!transferTo) return setMsg("Selecione a conta de destino.");
+    if (!transferAmount.trim()) return setMsg("Informe o valor.");
+    const toName = (data ?? []).find((a) => String(a.id) === transferTo)?.name ?? "conta";
+    const ok = await confirm.ask({
+      title: "Confirmar transferência?",
+      body: `R$ ${transferAmount.trim()} de “${fromName}” para “${toName}”. Não entra em receitas nem despesas.`,
+      confirmLabel: "Transferir",
+    });
+    if (!ok) return;
+    try {
+      await m.transfer.mutateAsync({ from_account_id: fromId, to_account_id: Number(transferTo), amount: transferAmount.trim() });
+      setTransferId(null); setTransferTo(""); setTransferAmount("");
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.message : "Falha ao transferir.");
+    }
+  }
 
   async function onCreate(ev: FormEvent) {
     ev.preventDefault();
@@ -96,8 +118,19 @@ export function AccountsPage() {
                   {a.last_transaction_date ? ` · últ. mov. ${a.last_transaction_date}` : ""})
                   {" "}<Link to="/app/transactions" search={{ account_id: a.id }}>ver movimentações</Link>
                 </span>
+                <Button size="sm" variant="ghost" onClick={() => { setTransferId(transferId === a.id ? null : a.id); setTransferTo(""); setTransferAmount(""); }}>Transferir</Button>
                 <Button size="sm" variant="ghost" onClick={() => { setEditing(a.id); setEditName(a.name); }}>Renomear</Button>
                 <Button size="sm" variant="danger" onClick={() => onDelete(a.id, a.name)}>Excluir</Button>
+                {transferId === a.id && (
+                  <form onSubmit={(e) => { e.preventDefault(); onTransfer(a.id, a.name); }} className="fw-row" style={{ marginTop: 8 }}>
+                    <select className="fw-select" style={{ width: "auto" }} aria-label="Conta de destino" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
+                      <option value="">Destino...</option>
+                      {(data ?? []).filter((o) => o.id !== a.id).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                    </select>
+                    <input className="fw-input" style={{ width: "auto" }} aria-label="Valor da transferência em R$" placeholder="Valor" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} />
+                    <Button size="sm" type="submit">Enviar</Button>
+                  </form>
+                )}
               </>
             )}
           </li>

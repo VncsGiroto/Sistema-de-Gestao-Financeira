@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import type { Asset, AssetBody, Op, OpBody } from "../../lib/api";
+import type { Asset, AssetBody, Op, OpBody, Portfolio } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 
 const STALE = 30_000;
@@ -21,8 +21,21 @@ export function useAssets(asset_class?: string) {
   });
 }
 
-export function useOps(assetId: number | null) {
+export function usePortfolio() {
   const { access, refresh } = useAuth();
+  return useQuery({
+    queryKey: ["portfolio"],
+    queryFn: async () => {
+      if (!access) throw new Error("Sem sessão");
+      const { data } = await api.authFetch<Portfolio>("/portfolio", access, refresh);
+      return data;
+    },
+    staleTime: STALE,
+    enabled: !!access,
+  });
+}
+
+export function useOps(assetId: number | null) {  const { access, refresh } = useAuth();
   return useQuery({
     queryKey: ["asset-ops", assetId],
     queryFn: async () => {

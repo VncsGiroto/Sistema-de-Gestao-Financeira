@@ -25,6 +25,17 @@ GET+POST /api/categories?type=EXPENSE · GET+PATCH+DELETE /api/categories/{id}
 GET+POST /api/transactions?from=&to=&category_id=&account_id=&type=&source=&payable_id=&q=&min=&max=
 GET+PATCH+DELETE /api/transactions/{id}
 POST /api/transactions/categorize {ids[], category_id} → {updated, skipped_type, skipped_missing} (pula incompatíveis)
+
+```
+POST /api/transfers {from_account_id, to_account_id, amount, date?, description?} → 201 (ledger patrimonial; sem efeito em receita/despesa)
+GET /api/transfers?account_id= → lista (origem ou destino)
+DELETE /api/transfers/{id} → 204 (reverte os dois lados; só TRANSFER avulsa)
+```
+POST /api/assets {ticker, asset_class, subtype, account_id? (INVESTMENT), ...} → 201 (409 ticker duplicado na mesma conta)
+PATCH /api/assets/{id} {account_id?, ...} → 200 (conta deve ser INVESTMENT)
+POST /api/assets/{id}/ops {APORTE|RESGATE (exigem conta vinculada; movem caixa atomicamente)|RENDIMENTO (espelha INCOME)|REINVESTIMENTO (posição/custo, sem receita/caixa)}
+GET /api/portfolio → {cash, positions_value, total, patrimonio, aportes, reinvestimentos, resgates, rendimentos, net_invested, resultado, xirr, positions[], unpriced[], by_class[], by_account[], snapshots[], history_since}
+```
 GET /api/transactions/export?format=csv&... (mesmos filtros)
 ```
 

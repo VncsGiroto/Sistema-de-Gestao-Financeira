@@ -48,15 +48,30 @@ async def get_category(session: AsyncSession, user_id: int, category_id: int) ->
 
 
 async def account_summaries(session: AsyncSession, user_id: int) -> dict[int, dict]:
-    """Totais por conta (1 GROUP BY): {account_id: {income, expense, last_date}}."""
+    """Totais por conta: {account_id: {income, expense, ledger_in, ledger_out, last_date}}."""
+    from app.modules.ledger import repository as ledger_repo
+
     out: dict[int, dict] = {}
+
+    def _slot(account_id: int) -> dict:
+        return out.setdefault(
+            account_id,
+            {
+                "income": Decimal("0"),
+                "expense": Decimal("0"),
+                "ledger_in": Decimal("0"),
+                "ledger_out": Decimal("0"),
+                "last_date": None,
+            },
+        )
+
     sums = await session.execute(
         select(Transaction.account_id, Transaction.type, func.sum(Transaction.amount))
         .where(Transaction.user_id == user_id)
         .group_by(Transaction.account_id, Transaction.type)
     )
     for account_id, ttype, total in sums.all():
-        d = out.setdefault(account_id, {"income": Decimal("0"), "expense": Decimal("0"), "last_date": None})
+        d = _slot(account_id)
         d["income" if ttype == "INCOME" else "expense"] = total or Decimal("0")
     lasts = await session.execute(
         select(Transaction.account_id, func.max(Transaction.date))
@@ -64,9 +79,11 @@ async def account_summaries(session: AsyncSession, user_id: int) -> dict[int, di
         .group_by(Transaction.account_id)
     )
     for account_id, last_date in lasts.all():
-        out.setdefault(account_id, {"income": Decimal("0"), "expense": Decimal("0"), "last_date": None})[
-            "last_date"
-        ] = last_date
+        _slot(account_id)["last_date"] = last_date
+    for account_id, sums_ in (await ledger_repo.account_ledger_sums(session, user_id)).items():
+        d = _slot(account_id)
+        d["ledger_in"] = sums_["in"]
+        d["ledger_out"] = sums_["out"]
     return out
 
 

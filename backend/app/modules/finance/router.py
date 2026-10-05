@@ -37,13 +37,15 @@ def _account_out(row, summary: dict | None = None) -> AccountOut:
     summary = summary or {}
     income = summary.get("income", Decimal("0"))
     expense = summary.get("expense", Decimal("0"))
+    ledger_in = summary.get("ledger_in", Decimal("0"))
+    ledger_out = summary.get("ledger_out", Decimal("0"))
     return AccountOut(
         id=row.id,
         name=row.name,
         bank=row.bank,
         account_type=row.account_type,
         initial_balance=row.initial_balance,
-        current_balance=row.initial_balance + income - expense,
+        current_balance=row.initial_balance + income - expense + ledger_in - ledger_out,
         total_income=income,
         total_expense=expense,
         last_transaction_date=summary.get("last_date"),

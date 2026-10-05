@@ -11,10 +11,17 @@ test("investments: ativo + aporte + preço manual + posição", async ({ page })
   await page.getByRole("button", { name: /criar conta/i }).click();
   await expect(page.getByText(/bem-vindo/i)).toBeVisible({ timeout: 15000 });
 
+  await page.goto("/app/accounts");
+  await page.getByPlaceholder("Nome").fill("Corretora E2E");
+  await page.locator("form").locator("select").first().selectOption("INVESTMENT");
+  await page.getByRole("button", { name: /^criar$/i }).click();
+  await expect(page.getByText(/corretora e2e/i)).toBeVisible({ timeout: 15000 });
+
   await page.goto("/app/investments");
   await page.getByPlaceholder("Ticker").fill(`TST${uniq.slice(0, 4).toUpperCase()}`);
   await page.locator("form").first().locator("select").first().selectOption("OUTROS");
   await page.getByPlaceholder("Subtipo").fill("OUTRO");
+  await page.getByLabel("Conta da corretora (opcional)").selectOption({ label: "Corretora E2E" });
   await page.getByRole("button", { name: /^criar$/i }).click();
   await expect(page.getByText(new RegExp(`tst${uniq.slice(0, 4)}`, "i"))).toBeVisible({ timeout: 15000 });
 
@@ -29,6 +36,10 @@ test("investments: ativo + aporte + preço manual + posição", async ({ page })
   // /returns aguarda fail-open dos benchmarks (BCB público): latência fria pode
   // estourar 15s na primeira chamada; valores não importam, só a presença.
   await expect(page.getByText(/XIRR/i)).toBeVisible({ timeout: 60000 });
+
+  // carteira consolidada: caixa zerado pelo aporte, total avaliado, histórico registrado
+  await expect(page.getByText(/caixa nas corretoras/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/histórico de operações \(1\)/i)).toBeVisible({ timeout: 15000 });
 
   // histórico lista o aporte; excluir com confirmação recalcula a posição
   await expect(page.getByText(/histórico de operações \(1\)/i)).toBeVisible({ timeout: 15000 });

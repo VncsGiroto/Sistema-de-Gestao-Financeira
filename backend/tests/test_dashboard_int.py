@@ -100,3 +100,44 @@ async def test_dashboard_massa_conhecida(dash):
     h2 = await _user(dash, "zz")
     r = await ac.get("/api/dashboard", params={"from": "2026-09-01", "to": "2026-09-30"}, headers=h2)
     assert Decimal(str(r.json()["balance"])) == 0 and Decimal(str(r.json()["income"]["total"])) == 0
+
+
+async def test_dashboard_inclui_ledger(dash):
+    """Painel soma ledger (transferência não é receita/despesa): geral neutro, filtrado por conta reduzido."""
+    ac, h = dash, await _user(dash, "led")
+    r = await ac.post(
+        "/api/accounts", json={"name": "Conta A", "account_type": "CHECKING", "initial_balance": "0"}, headers=h
+    )
+    acc_a = r.json()["id"]
+    r = await ac.post(
+        "/api/accounts", json={"name": "Conta B", "account_type": "CHECKING", "initial_balance": "0"}, headers=h
+    )
+    acc_b = r.json()["id"]
+    r = await ac.post(
+        "/api/transactions",
+        json={"account_id": acc_a, "date": "2026-09-05", "description": "SAL", "amount": "500", "type": "INCOME"},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    r = await ac.post(
+        "/api/transfers",
+        json={"from_account_id": acc_a, "to_account_id": acc_b, "amount": "200", "date": "2026-09-06"},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+
+    params = {"from": "2026-09-01", "to": "2026-09-30"}
+    d = (await ac.get("/api/dashboard", params=params, headers=h)).json()
+    assert Decimal(str(d["balance"])) == Decimal("500")
+    assert Decimal(str(d["income"]["total"])) == Decimal("500")
+    assert Decimal(str(d["expense"]["total"])) == 0
+
+    d_a = (await ac.get("/api/dashboard", params={**params, "account_id": acc_a}, headers=h)).json()
+    assert Decimal(str(d_a["balance"])) == Decimal("300")
+
+    d_b = (await ac.get("/api/dashboard", params={**params, "account_id": acc_b}, headers=h)).json()
+    assert Decimal(str(d_b["balance"])) == Decimal("200")
+
+    # confere contra a aba Contas
+    a = (await ac.get(f"/api/accounts/{acc_a}", headers=h)).json()
+    assert a["current_balance"] == d_a["balance"]

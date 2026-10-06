@@ -3,10 +3,11 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.finance.models import Account, Category, Transaction
+from app.modules.ledger.models import LedgerMovement
 
 
 def _month_start(d: date) -> date:
@@ -80,6 +81,33 @@ async def get_dashboard(
         else:
             cum_expense += amount
 
+    # Ledger canônico (transferências + aportes/resgates): sem ele o painel
+    # mostra o valor "cheio" e diverge da aba Contas. Mesmo corte de escopo
+    # (contas) e de data (<= end) do cumulativo; receita/despesa não mudam.
+    ledger_in = ledger_out = Decimal("0")
+    account_ids = [a.id for a in accounts]
+    if account_ids:
+        lin = (
+            await session.execute(
+                select(func.sum(LedgerMovement.amount)).where(
+                    LedgerMovement.user_id == user_id,
+                    LedgerMovement.date <= end,
+                    LedgerMovement.to_account_id.in_(account_ids),
+                )
+            )
+        ).scalar()
+        lout = (
+            await session.execute(
+                select(func.sum(LedgerMovement.amount)).where(
+                    LedgerMovement.user_id == user_id,
+                    LedgerMovement.date <= end,
+                    LedgerMovement.from_account_id.in_(account_ids),
+                )
+            )
+        ).scalar()
+        ledger_in = lin or Decimal("0")
+        ledger_out = lout or Decimal("0")
+
     cats = {
         c.id: c.name
         for c in (await session.execute(select(Category).where(Category.user_id == user_id))).scalars().all()
@@ -132,7 +160,7 @@ async def get_dashboard(
     uncategorized = len((await session.execute(uncat_q)).all())
 
     return {
-        "balance": initial + cum_income - cum_expense,
+        "balance": initial + cum_income - cum_expense + ledger_in - ledger_out,
         "income": {"total": income, "by_category": [{"name": k, "total": v} for k, v in sorted(by_inc.items())]},
         "expense": {"total": expense, "by_category": [{"name": k, "total": v} for k, v in sorted(by_exp.items())]},
         "evolution": [{"month": m, "income": evo[m]["income"], "expense": evo[m]["expense"]} for m in sorted(evo)],

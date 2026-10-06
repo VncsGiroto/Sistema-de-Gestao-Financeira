@@ -254,6 +254,28 @@ async def test_pay_recorrente_e_unica(pac):
     assert (await ac.post(f"/api/payables/{oid}/pay", json={"account_id": acc}, headers=h)).status_code == 422
 
 
+async def test_pay_concorrente_unica(pac):
+    """Duas baixas simultâneas da mesma conta única: só uma pode passar (lock na linha)."""
+    import asyncio as aio
+
+    ac, h = pac, await _user(pac, "racepay")
+    acc = await _account(ac, h)
+    r = await ac.post(
+        "/api/payables",
+        json={"description": "Show", "kind": "ONE_TIME", "amount": "90", "next_due": "2026-11-01"},
+        headers=h,
+    )
+    oid = r.json()["id"]
+
+    async def pay():
+        return await ac.post(f"/api/payables/{oid}/pay", json={"account_id": acc}, headers=h)
+
+    r1, r2 = await aio.gather(pay(), pay())
+    assert sorted([r1.status_code, r2.status_code]) == [200, 422]
+    r = await ac.get("/api/transactions", params={"payable_id": oid, "per_page": 50}, headers=h)
+    assert len(r.json()["data"]) == 1
+
+
 async def test_pay_categoria_incompativel(pac):
     """0.2: baixa sempre gera EXPENSE — categoria INCOME (no payable ou no override) → 422."""
     ac, h = pac, await _user(pac, "kcat")

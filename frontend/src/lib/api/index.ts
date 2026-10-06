@@ -9,5 +9,6 @@ export * from "./dashboard";
 export * from "./investments";
 export * from "./payables";
 export * from "./transfers";
+export * from "./movements";
 export * from "./health";
 export { api } from "./client";

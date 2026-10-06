@@ -2,6 +2,7 @@ import { authApi } from "./auth";
 import { accountsApi } from "./accounts";
 import { categoriesApi } from "./categories";
 import { downloadTransactionsCsv, txsApi } from "./transactions";
+import { downloadMovementsCsv, movementsApi } from "./movements";
 import { transfersApi } from "./transfers";
 import { importsApi } from "./imports";
 import { dashboardApi } from "./dashboard";
@@ -26,7 +27,9 @@ export const api = {
   assets: assetsApi,
   payables: payablesApi,
   transfers: transfersApi,
+  movements: movementsApi,
   authFetch,
   authed,
   downloadCsv: downloadTransactionsCsv,
+  downloadMovementsCsv,
 };

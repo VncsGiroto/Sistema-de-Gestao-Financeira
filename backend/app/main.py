@@ -11,6 +11,7 @@ from app.modules.imports.router import router as imports_router
 from app.modules.investments.router import portfolio_router as portfolio_router
 from app.modules.investments.router import router as investments_router
 from app.modules.ledger.router import router as ledger_router
+from app.modules.movements.router import router as movements_router
 from app.modules.payables.router import router as payables_router
 
 app = FastAPI(title=settings.app_name, docs_url="/api/docs", redoc_url="/api/redoc")
@@ -31,6 +32,7 @@ app.include_router(imports_router)
 app.include_router(investments_router)
 app.include_router(portfolio_router)
 app.include_router(ledger_router)
+app.include_router(movements_router)
 
 app.include_router(payables_router)
 app.include_router(dashboard_router)

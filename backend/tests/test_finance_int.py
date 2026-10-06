@@ -143,6 +143,46 @@ async def test_account_types_enum(app_client):
     assert r.status_code == 422, r.text
 
 
+async def test_account_type_travado_com_vinculo(app_client):
+    """Conta com ativo vinculado ou ledger não troca de tipo (reclassificaria a carteira)."""
+    ac = app_client
+    _, ha = await _user(ac, "tieacc")
+    r = await ac.post("/api/accounts", json={"name": "Corretora", "account_type": "INVESTMENT"}, headers=ha)
+    br = r.json()["id"]
+    r = await ac.post(
+        "/api/assets", json={"ticker": "TIEA", "asset_class": "FUNDOS", "subtype": "FII", "account_id": br}, headers=ha
+    )
+    assert r.status_code == 201, r.text
+    r = await ac.patch(f"/api/accounts/{br}", json={"account_type": "CHECKING"}, headers=ha)
+    assert r.status_code == 422
+    # sem vínculo, troca livre
+    r = await ac.post("/api/accounts", json={"name": "Livre", "account_type": "CHECKING"}, headers=ha)
+    livre = r.json()["id"]
+    r = await ac.patch(f"/api/accounts/{livre}", json={"account_type": "SAVINGS"}, headers=ha)
+    assert r.status_code == 200 and r.json()["account_type"] == "SAVINGS"
+
+
+async def test_saldo_atual_ignora_lancamento_futuro(app_client):
+    """Saldo 'atual' corta em hoje: receita futura não entra no current_balance."""
+    from datetime import date, timedelta
+
+    ac = app_client
+    _, ha = await _user(ac, "fut")
+    r = await ac.post(
+        "/api/accounts", json={"name": "Corrente", "account_type": "CHECKING", "initial_balance": "100.00"}, headers=ha
+    )
+    acc = r.json()["id"]
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    r = await ac.post(
+        "/api/transactions",
+        json={"account_id": acc, "date": tomorrow, "description": "FUTURO", "amount": "500.00", "type": "INCOME"},
+        headers=ha,
+    )
+    assert r.status_code == 201, r.text
+    got = (await ac.get(f"/api/accounts/{acc}", headers=ha)).json()
+    assert got["current_balance"] == "100.00"
+
+
 async def test_categories_crud_e_uniqueness(app_client):
     ac = app_client
     _, ha = await _user(ac, "carol")

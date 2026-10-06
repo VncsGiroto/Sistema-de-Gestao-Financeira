@@ -42,6 +42,11 @@ async def create_transfer(
         description=(description or "Transferência").strip(),
     )
     session.add(row)
+    await session.flush()
+    # O caixa da corretora mudou: atualiza a série da carteira na data do evento.
+    from app.modules.investments import portfolio as pf
+
+    await pf.upsert_snapshot(session, user_id, on)
     await session.commit()
     await session.refresh(row)
     return row
@@ -65,25 +70,35 @@ async def get_movement(session: AsyncSession, user_id: int, movement_id: int) ->
 async def delete_movement(session: AsyncSession, row: LedgerMovement) -> None:
     if row.kind != "TRANSFER":
         raise LedgerError("Movimento ligado a operação só pode ser revertido pela operação")
+    on = row.date
+    user_id = row.user_id
     await session.delete(row)
+    await session.flush()
+    from app.modules.investments import portfolio as pf
+
+    await pf.upsert_snapshot(session, user_id, on)
     await session.commit()
 
 
-async def account_ledger_sums(session: AsyncSession, user_id: int) -> dict[int, dict]:
-    """{account_id: {ledger_in, ledger_out}} em 2 GROUP BYs."""
+async def account_ledger_sums(session: AsyncSession, user_id: int, end: date_t | None = None) -> dict[int, dict]:
+    """{account_id: {ledger_in, ledger_out}} em 2 GROUP BYs. `end` = corte as-of."""
     out: dict[int, dict] = {}
-    ins = await session.execute(
-        select(LedgerMovement.to_account_id, func.sum(LedgerMovement.amount))
-        .where(LedgerMovement.user_id == user_id, LedgerMovement.to_account_id.is_not(None))
-        .group_by(LedgerMovement.to_account_id)
+    ins_q = select(LedgerMovement.to_account_id, func.sum(LedgerMovement.amount)).where(
+        LedgerMovement.user_id == user_id, LedgerMovement.to_account_id.is_not(None)
     )
+    outs_q = select(LedgerMovement.from_account_id, func.sum(LedgerMovement.amount)).where(
+        LedgerMovement.user_id == user_id, LedgerMovement.from_account_id.is_not(None)
+    )
+    if end is not None:
+        ins_q = ins_q.where(LedgerMovement.date <= end)
+        outs_q = outs_q.where(LedgerMovement.date <= end)
+    if end is not None:
+        ins_q = ins_q.where(LedgerMovement.date <= end)
+        outs_q = outs_q.where(LedgerMovement.date <= end)
+    ins = await session.execute(ins_q.group_by(LedgerMovement.to_account_id))
     for account_id, total in ins.all():
         out.setdefault(account_id, {"in": Decimal("0"), "out": Decimal("0")})["in"] = total or Decimal("0")
-    outs = await session.execute(
-        select(LedgerMovement.from_account_id, func.sum(LedgerMovement.amount))
-        .where(LedgerMovement.user_id == user_id, LedgerMovement.from_account_id.is_not(None))
-        .group_by(LedgerMovement.from_account_id)
-    )
+    outs = await session.execute(outs_q.group_by(LedgerMovement.from_account_id))
     for account_id, total in outs.all():
         out.setdefault(account_id, {"in": Decimal("0"), "out": Decimal("0")})["out"] = total or Decimal("0")
     return out

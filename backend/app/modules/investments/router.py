@@ -136,6 +136,10 @@ async def patch_asset(
         repo.validate_rate(row.asset_class, rate_type, rate)
     except ValueError as e:
         raise unprocessable(str(e))
+    if "account_id" in data and data["account_id"] != row.account_id:
+        # Trocar a conta com histórico separa posição e caixa (movimentos ficam na antiga).
+        if await repo.list_ops(session, user.id, asset_id):
+            raise unprocessable("Ativo com operações não pode trocar de conta; crie um novo vínculo")
     for k, v in data.items():
         setattr(row, k, v)
     await session.commit()
@@ -211,7 +215,7 @@ async def get_position(asset_id: int, session: AsyncSession = Depends(get_sessio
     row = await repo.get_asset(session, user.id, asset_id)
     if row is None:
         raise not_found()
-    pos = await repo.get_position(session, user.id, asset_id)
+    pos = await repo.get_position(session, user.id, asset_id, date.today())
     out = {
         "asset_id": asset_id,
         **{

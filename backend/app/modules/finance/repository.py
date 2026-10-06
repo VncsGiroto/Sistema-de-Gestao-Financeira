@@ -47,8 +47,11 @@ async def get_category(session: AsyncSession, user_id: int, category_id: int) ->
     return res.scalar_one_or_none()
 
 
-async def account_summaries(session: AsyncSession, user_id: int) -> dict[int, dict]:
-    """Totais por conta: {account_id: {income, expense, ledger_in, ledger_out, last_date}}."""
+async def account_summaries(session: AsyncSession, user_id: int, end: date_t | None = None) -> dict[int, dict]:
+    """Totais por conta: {account_id: {income, expense, ledger_in, ledger_out, last_date}}.
+
+    `end` limita a data de referência (carteira as-of); None = tudo até hoje.
+    """
     from app.modules.ledger import repository as ledger_repo
 
     out: dict[int, dict] = {}
@@ -65,22 +68,21 @@ async def account_summaries(session: AsyncSession, user_id: int) -> dict[int, di
             },
         )
 
-    sums = await session.execute(
-        select(Transaction.account_id, Transaction.type, func.sum(Transaction.amount))
-        .where(Transaction.user_id == user_id)
-        .group_by(Transaction.account_id, Transaction.type)
+    sums_q = select(Transaction.account_id, Transaction.type, func.sum(Transaction.amount)).where(
+        Transaction.user_id == user_id
     )
+    lasts_q = select(Transaction.account_id, func.max(Transaction.date)).where(Transaction.user_id == user_id)
+    if end is not None:
+        sums_q = sums_q.where(Transaction.date <= end)
+        lasts_q = lasts_q.where(Transaction.date <= end)
+    sums = await session.execute(sums_q.group_by(Transaction.account_id, Transaction.type))
     for account_id, ttype, total in sums.all():
         d = _slot(account_id)
         d["income" if ttype == "INCOME" else "expense"] = total or Decimal("0")
-    lasts = await session.execute(
-        select(Transaction.account_id, func.max(Transaction.date))
-        .where(Transaction.user_id == user_id)
-        .group_by(Transaction.account_id)
-    )
+    lasts = await session.execute(lasts_q.group_by(Transaction.account_id))
     for account_id, last_date in lasts.all():
         _slot(account_id)["last_date"] = last_date
-    for account_id, sums_ in (await ledger_repo.account_ledger_sums(session, user_id)).items():
+    for account_id, sums_ in (await ledger_repo.account_ledger_sums(session, user_id, end)).items():
         d = _slot(account_id)
         d["ledger_in"] = sums_["in"]
         d["ledger_out"] = sums_["out"]
@@ -206,6 +208,39 @@ async def create_tx(
 async def get_tx(session: AsyncSession, user_id: int, tx_id: int) -> Transaction | None:
     res = await session.execute(select(Transaction).where(Transaction.id == tx_id, Transaction.user_id == user_id))
     return res.scalar_one_or_none()
+
+
+async def is_investment_linked(session: AsyncSession, user_id: int, tx_id: int) -> bool:
+    """Transação espelhada por operação de investimento (rendimento): só a operação pode alterá-la."""
+    from app.modules.investments.models import InvestmentOp
+
+    res = await session.execute(
+        select(InvestmentOp.id).where(InvestmentOp.user_id == user_id, InvestmentOp.transaction_id == tx_id)
+    )
+    return res.scalar_one_or_none() is not None
+
+
+async def has_investment_links(session: AsyncSession, user_id: int, account_id: int) -> bool:
+    """Conta com ativos vinculados ou movimentos no ledger: trocar o tipo reclassificaria a carteira."""
+    from app.modules.investments.models import Asset
+    from app.modules.ledger.models import LedgerMovement
+
+    asset = (
+        await session.execute(select(Asset.id).where(Asset.user_id == user_id, Asset.account_id == account_id).limit(1))
+    ).scalar_one_or_none()
+    if asset is not None:
+        return True
+    movement = (
+        await session.execute(
+            select(LedgerMovement.id)
+            .where(
+                LedgerMovement.user_id == user_id,
+                ((LedgerMovement.from_account_id == account_id) | (LedgerMovement.to_account_id == account_id)),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return movement is not None
 
 
 async def list_txs(session: AsyncSession, user_id: int, f: TxFilters, page: int, per_page: int):

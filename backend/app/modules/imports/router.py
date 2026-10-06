@@ -51,11 +51,22 @@ async def upload_ofx(
         raise http_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unprocessable", "Envie um arquivo .ofx ou .qfx")
     if await finance_repo.get_account(session, user.id, account_id) is None:
         raise not_found()
-    raw = await file.read()
-    if not raw:
+    # Lê em blocos até o limite: rejeita sem carregar o arquivo inteiro na memória.
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        part = await file.read(64 * 1024)
+        if not part:
+            break
+        chunks.append(part)
+        total += len(part)
+        if total > settings.ofx_max_bytes:
+            break
+    if total == 0:
         raise http_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unprocessable", "Arquivo vazio")
-    if len(raw) > settings.ofx_max_bytes:
+    if total > settings.ofx_max_bytes:
         raise http_error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Payload Too Large", "Máximo de 10MB")
+    raw = b"".join(chunks)
     os.makedirs(settings.ofx_dir, exist_ok=True)
     path = os.path.join(settings.ofx_dir, f"{user.id}_{uuid.uuid4().hex}.ofx")
     with open(path, "wb") as fh:

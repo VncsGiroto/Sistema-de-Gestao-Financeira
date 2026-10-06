@@ -108,13 +108,18 @@ async def _snapshot(session: AsyncSession, asset: Asset, ref: date, price: Price
         await session.flush()
 
 
-async def resolve_price(session: AsyncSession, asset: Asset, ref: date) -> Price | None:
-    """RF com contrato: só ACCRUAL ou override explícito. Demais: MANUAL. Sem fallback silencioso."""
+async def resolve_price(session: AsyncSession, asset: Asset, ref: date, persist: bool = False) -> Price | None:
+    """RF com contrato: só ACCRUAL ou override explícito. Demais: MANUAL. Sem fallback silencioso.
+
+    `persist` grava o snapshot diário do accrual (só em operações que fazem commit;
+    leituras GET nunca escrevem incidentalmente).
+    """
     contracted = asset.asset_class == "RENDA_FIXA" and asset.rate_type in ("CDI_PCT", "PREFIXADO")
     if contracted:
         q = await AccrualProvider().quote(asset, ref, session)
         if q is not None:
-            await _snapshot(session, asset, ref, q)
+            if persist:
+                await _snapshot(session, asset, ref, q)
             return q
         return await ManualProvider(("MANUAL_OVERRIDE",)).quote(asset, ref, session)
     return await ManualProvider().quote(asset, ref, session)
@@ -130,9 +135,9 @@ async def contract_quote(session: AsyncSession, asset: Asset, ref: date) -> Deci
     from app.modules.investments.position import position as calc_position
 
     res = await session.execute(
-        select(InvestmentOp).where(
-            InvestmentOp.asset_id == asset.id, InvestmentOp.user_id == asset.user_id, InvestmentOp.date <= ref
-        )
+        select(InvestmentOp)
+        .where(InvestmentOp.asset_id == asset.id, InvestmentOp.user_id == asset.user_id, InvestmentOp.date <= ref)
+        .order_by(InvestmentOp.date, InvestmentOp.id)
     )
     ops = [
         {"kind": o.kind, "quantity": o.quantity, "price": o.price, "fees": o.fees, "amount": o.amount}

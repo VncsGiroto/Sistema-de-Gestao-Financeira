@@ -54,14 +54,14 @@ def _account_out(row, summary: dict | None = None) -> AccountOut:
 
 @accounts.get("", response_model=list[AccountOut])
 async def list_accounts(session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
-    sums = await repo.account_summaries(session, user.id)
+    sums = await repo.account_summaries(session, user.id, date_t.today())
     return [_account_out(r, sums.get(r.id)) for r in await repo.list_accounts(session, user.id)]
 
 
 @accounts.post("", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
 async def create_account(body: AccountIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
     row = await repo.create_account(session, user.id, **body.model_dump())
-    sums = await repo.account_summaries(session, user.id)
+    sums = await repo.account_summaries(session, user.id, date_t.today())
     return _account_out(row, sums.get(row.id))
 
 
@@ -70,7 +70,7 @@ async def get_account(account_id: int, session: AsyncSession = Depends(get_sessi
     row = await repo.get_account(session, user.id, account_id)
     if row is None:
         raise not_found()  # 404 também para recurso de outro usuário (não vaza existência)
-    sums = await repo.account_summaries(session, user.id)
+    sums = await repo.account_summaries(session, user.id, date_t.today())
     return _account_out(row, sums.get(row.id))
 
 
@@ -81,11 +81,16 @@ async def patch_account(
     row = await repo.get_account(session, user.id, account_id)
     if row is None:
         raise not_found()
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "account_type" in data and data["account_type"] != row.account_type:
+        # Trocar o tipo com vínculos reclassificaria a carteira e os fluxos históricos.
+        if await repo.has_investment_links(session, user.id, account_id):
+            raise unprocessable("Conta com investimentos ou transferências não pode trocar de tipo")
+    for k, v in data.items():
         setattr(row, k, v)
     await session.commit()
     await session.refresh(row)
-    sums = await repo.account_summaries(session, user.id)
+    sums = await repo.account_summaries(session, user.id, date_t.today())
     return _account_out(row, sums.get(row.id))
 
 
@@ -212,6 +217,9 @@ async def create_tx(body: TxIn, session: AsyncSession = Depends(get_session), us
         raise not_found()
     except repo.CategoryMismatch as e:
         raise unprocessable(str(e))
+    from app.modules.investments import portfolio as pf
+
+    await pf.record_snapshot(session, user.id)
     return _tx_out(row)
 
 
@@ -241,6 +249,8 @@ async def patch_tx(
     row = await repo.get_tx(session, user.id, tx_id)
     if row is None:
         raise not_found()
+    if await repo.is_investment_linked(session, user.id, tx_id):
+        raise unprocessable("Transação gerada por operação de investimento; edite ou exclua pela operação")
     data = body.model_dump(exclude_unset=True)
     if "account_id" in data and await repo.get_account(session, user.id, data["account_id"]) is None:
         raise not_found()
@@ -257,6 +267,9 @@ async def patch_tx(
         setattr(row, k, v)
     await session.commit()
     await session.refresh(row)
+    from app.modules.investments import portfolio as pf
+
+    await pf.record_snapshot(session, user.id)
     return _tx_out(row)
 
 
@@ -265,7 +278,12 @@ async def delete_tx(tx_id: int, session: AsyncSession = Depends(get_session), us
     row = await repo.get_tx(session, user.id, tx_id)
     if row is None:
         raise not_found()
+    if await repo.is_investment_linked(session, user.id, tx_id):
+        raise unprocessable("Transação gerada por operação de investimento; edite ou exclua pela operação")
     await repo.delete_tx(session, row)
+    from app.modules.investments import portfolio as pf
+
+    await pf.record_snapshot(session, user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

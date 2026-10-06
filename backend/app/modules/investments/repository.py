@@ -91,15 +91,14 @@ async def delete_asset(session: AsyncSession, row: Asset) -> None:
     await session.commit()
 
 
-async def list_ops(session: AsyncSession, user_id: int, asset_id: int) -> list[InvestmentOp]:
+async def list_ops(session: AsyncSession, user_id: int, asset_id: int, end: date | None = None) -> list[InvestmentOp]:
     asset = await get_asset(session, user_id, asset_id)
     if asset is None:
         raise LookupError("asset")
-    res = await session.execute(
-        select(InvestmentOp)
-        .where(InvestmentOp.asset_id == asset_id, InvestmentOp.user_id == user_id)
-        .order_by(InvestmentOp.date, InvestmentOp.id)
-    )
+    q = select(InvestmentOp).where(InvestmentOp.asset_id == asset_id, InvestmentOp.user_id == user_id)
+    if end is not None:
+        q = q.where(InvestmentOp.date <= end)
+    res = await session.execute(q.order_by(InvestmentOp.date, InvestmentOp.id))
     return list(res.scalars().all())
 
 
@@ -165,8 +164,7 @@ async def add_op(
             if kind == "RESGATE":
                 pos = await get_position(session, user_id, asset_id)
                 if quantity > pos["quantity"]:
-                    quantity, price = pos["quantity"], quote
-                    amount = (quantity * quote).quantize(Decimal("0.01"))
+                    raise ValueError("Valor do resgate excede a posição; use Resgatar tudo para liquidar")
     if kind in ("APORTE", "RESGATE"):
         if quantity is None or price is None:
             raise ValueError("APORTE/RESGATE exigem quantity e price")
@@ -188,10 +186,24 @@ async def add_op(
         )
         if acc_res.scalar_one_or_none() is None:
             raise LookupError("account")
+        if kind == "RESGATE":
+            # Revalida após o lock: um resgate concorrente pode ter consumido a posição
+            # entre a conversão em valor e aqui. `full` usa a posição fresca; parcial
+            # acima da posição → 422 (nunca liquida silenciosamente).
+            fresh = await get_position(session, user_id, asset_id)
+            if full:
+                if fresh["quantity"] <= 0:
+                    raise ValueError("Posição zerada")
+                quantity = fresh["quantity"]
+            elif quantity > fresh["quantity"]:
+                raise ValueError("Valor do resgate excede a posição; use Resgatar tudo para liquidar")
+            amount = quantity * price - fees
+            if amount <= 0:
+                raise ValueError("Valor da operação deve ser positivo")
         if kind == "APORTE":
             from app.modules.finance import repository as finance_repo
 
-            bal = await finance_repo.account_summaries(session, user_id)
+            bal = await finance_repo.account_summaries(session, user_id, date.today())
             s = bal.get(asset.account_id, {})
             acc_row = await finance_repo.get_account(session, user_id, asset.account_id)
             cur = (
@@ -295,8 +307,8 @@ async def delete_op(session: AsyncSession, user_id: int, asset_id: int, op_id: i
     return True
 
 
-async def get_position(session: AsyncSession, user_id: int, asset_id: int) -> dict:
-    ops = await list_ops(session, user_id, asset_id)
+async def get_position(session: AsyncSession, user_id: int, asset_id: int, end: date | None = None) -> dict:
+    ops = await list_ops(session, user_id, asset_id, end)
     return calc_position(
         [{"kind": o.kind, "quantity": o.quantity, "price": o.price, "fees": o.fees, "amount": o.amount} for o in ops]
     )
@@ -354,7 +366,8 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
     asset = await get_asset(session, user_id, asset_id)
     if asset is None:
         raise LookupError("asset")
-    ops = await list_ops(session, user_id, asset_id)
+    # Leituras "atuais" ignoram operações futuras (aceitas p/ classes sem contrato).
+    ops = [o for o in await list_ops(session, user_id, asset_id) if o.date <= end]
     if not ops:
         return {
             "start": None,
@@ -379,7 +392,7 @@ async def get_returns(session: AsyncSession, user_id: int, asset_id: int, end) -
                 return Decimal(o.price)
         return None
 
-    pos = await get_position(session, user_id, asset_id)
+    pos = await get_position(session, user_id, asset_id, end)
     cur = await resolve_price(session, asset, end)
     cur_value = (cur.price * pos["quantity"]).quantize(Decimal("0.01")) if cur and pos["quantity"] > 0 else None
 

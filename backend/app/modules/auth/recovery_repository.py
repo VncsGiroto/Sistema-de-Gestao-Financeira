@@ -30,8 +30,8 @@ async def create_for_user(session: AsyncSession, user_id: int) -> tuple[str, Pas
     )
     session.add(row)
     await session.flush()
-    # dev: token visível no log (sem SMTP no MVP)
-    log.warning("recovery token user_id=%s token=%s", user_id, token)
+    # Nunca registra o token bruto: ele equivale à senha até expirar.
+    log.warning("recovery token emitido user_id=%s reset_id=%s", user_id, row.id)
     return token, row
 
 

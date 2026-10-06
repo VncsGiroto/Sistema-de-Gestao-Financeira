@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { BackButton } from "./BackButton";
 
@@ -7,12 +7,15 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: "md" | "sm";
 };
 
-export function Button({ variant = "primary", size = "md", className = "", ...rest }: BtnProps) {
+export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button(
+  { variant = "primary", size = "md", className = "", ...rest },
+  ref,
+) {
   const cls = `fw-btn${variant === "ghost" ? " ghost" : ""}${variant === "danger" ? " danger" : ""}${
     variant === "link" ? " linklike" : ""
   }${size === "sm" ? " sm" : ""} ${className}`.trim();
-  return <button className={cls} {...rest} />;
-}
+  return <button ref={ref} className={cls} {...rest} />;
+});
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`fw-card ${className}`.trim()}>{children}</div>;
@@ -63,6 +66,44 @@ export interface ConfirmAsk {
  */
 export function useConfirm() {
   const [ask, setAsk] = useState<(ConfirmAsk & { resolve: (ok: boolean) => void }) | null>(null);
+  const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const prevFocus = useRef<Element | null>(null);
+  useEffect(() => {
+    if (!ask) return;
+    prevFocus.current = document.activeElement;
+    confirmRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        ask.resolve(false);
+        setAsk(null);
+        return;
+      }
+      // Mantém o foco preso dentro do modal enquanto aberto.
+      if (e.key === "Tab") {
+        const root = rootRef.current;
+        if (!root) return;
+        const items = Array.from(
+          root.querySelectorAll<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"),
+        ).filter((el) => !el.hasAttribute("disabled"));
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (prevFocus.current instanceof HTMLElement) prevFocus.current.focus();
+    };
+  }, [ask]);
   return {
     dialog: ask ? (
       <div
@@ -72,12 +113,12 @@ export function useConfirm() {
         style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
         onClick={() => { ask.resolve(false); setAsk(null); }}
       >
-        <div className="fw-card" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+        <div ref={rootRef} className="fw-card" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
           <h2 style={{ marginTop: 0 }}>{ask.title}</h2>
           <p>{ask.body}</p>
           <div className="fw-row" style={{ justifyContent: "flex-end" }}>
             <Button variant="ghost" onClick={() => { ask.resolve(false); setAsk(null); }}>Cancelar</Button>
-            <Button variant="danger" onClick={() => { ask.resolve(true); setAsk(null); }}>
+            <Button variant="danger" ref={confirmRef} onClick={() => { ask.resolve(true); setAsk(null); }}>
               {ask.confirmLabel ?? "Confirmar"}
             </Button>
           </div>

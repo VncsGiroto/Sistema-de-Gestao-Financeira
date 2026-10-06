@@ -23,7 +23,7 @@ Swagger: `/api/docs`. ReDoc: `/api/redoc`. Spec: `backend/openapi.yaml` (gerado 
 GET+POST /api/accounts · GET+PATCH+DELETE /api/accounts/{id}
 GET+POST /api/categories?type=EXPENSE · GET+PATCH+DELETE /api/categories/{id}
 GET+POST /api/transactions?from=&to=&category_id=&account_id=&type=&source=&payable_id=&q=&min=&max=
-GET+PATCH+DELETE /api/transactions/{id}
+GET+PATCH+DELETE /api/transactions/{id} (transação espelhada por RENDIMENTO → 422; alterar/excluir pela operação)
 POST /api/transactions/categorize {ids[], category_id} → {updated, skipped_type, skipped_missing} (pula incompatíveis)
 
 ```
@@ -31,10 +31,18 @@ POST /api/transfers {from_account_id, to_account_id, amount, date?, description?
 GET /api/transfers?account_id= → lista (origem ou destino)
 DELETE /api/transfers/{id} → 204 (reverte os dois lados; só TRANSFER avulsa)
 ```
+## 2b. Movimentações unificadas (leitura; uma linha por evento, sem duplicar)
+```
+GET /api/movements?from=&to=&account_id=&kind=&page=&per_page= → {data[], meta{page,per_page,total}}
+kind ∈ INCOME|EXPENSE|TRANSFER|APORTE|RESGATE|RENDIMENTO|REINVESTIMENTO (conjuntos disjuntos; default = todos).
+Cada item: {id (tx:|ledger:|op:), kind, date, description, amount, direction (in|out|neutral — no contexto da conta; sem conta, transferência é neutra), cash_impact, account/from/to, asset_id/ticker/op_id/transaction_id/movement_id, editable, origin (transaction|operation|transfer), origin_hint}.
+Ordem total fixa: data desc, fonte (ledger, transação, op), id desc. Rendimento aparece 1x (pela transação vinculada); reinvestimento é neutro (visível na conta do ativo).
+GET /api/movements/export/csv (mesmos filtros/fontes/ordenação)
+```
 POST /api/assets {ticker, asset_class, subtype, account_id? (INVESTMENT), ...} → 201 (409 ticker duplicado na mesma conta)
-PATCH /api/assets/{id} {account_id?, ...} → 200 (conta deve ser INVESTMENT)
-POST /api/assets/{id}/ops {APORTE|RESGATE (exigem conta vinculada; movem caixa atomicamente)|RENDIMENTO (espelha INCOME)|REINVESTIMENTO (posição/custo, sem receita/caixa)}
-RF com contrato (CDI_PCT/PREFIXADO): ops em valor — `amount` obrigatório, `quantity`/`price` rejeitados; conversão pela cotação do contrato na data (1,0 sem posição); `full:true` no RESGATE liquida tudo (incompatível com `amount`); data futura → 422; caixa insuficiente → 422
+PATCH /api/assets/{id} {account_id?, ...} → 200 (conta deve ser INVESTMENT; com operações, trocar de conta → 422)
+POST /api/assets/{id}/ops {APORTE|RESGATE (exigem conta vinculada; movem caixa atomicamente; lock pessimista)|RENDIMENTO (espelha INCOME)|REINVESTIMENTO (posição/custo, sem receita/caixa)}
+RF com contrato (CDI_PCT/PREFIXADO): ops em valor — `amount` obrigatório, `quantity`/`price` rejeitados; conversão pela cotação do contrato na data (1,0 sem posição); `full:true` no RESGATE liquida tudo (incompatível com `amount`); resgate parcial acima da posição → 422 (nunca liquida silenciosamente); data futura → 422; caixa insuficiente → 422
 POST /api/assets/{id}/prices {date, price, override?} → manual bloqueado com contrato (só `override:true` → `MANUAL_OVERRIDE`)
 GET /api/portfolio → {cash, positions_value, total, patrimonio, aportes, reinvestimentos, resgates, rendimentos, net_invested (externo), resultado, xirr, twr, positions[], unpriced[], by_class[], by_account[], snapshots[], history_since}
 ```
@@ -50,7 +58,7 @@ Exemplo `POST /api/transactions`:
 ## 3. Imports OFX
 
 ```
-POST /api/imports/ofx (multipart: account_id, file .ofx) → 202 {import_id,status:RECEIVED}
+POST /api/imports/ofx (multipart: account_id, file .ofx) → 202 {import_id,status:RECEIVED} (lê em blocos; acima de 10MB → 413)
 GET /api/imports → lista com contadores
 GET /api/imports/{id} → status + resumo {total,imported,duplicates,failed}
 GET /api/imports/{id}/items → [{id, row_no, verdict, payload, matched_transaction_id, decision}] (`decision` nulo até revisar)

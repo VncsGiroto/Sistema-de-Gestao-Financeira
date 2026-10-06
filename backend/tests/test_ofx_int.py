@@ -161,6 +161,18 @@ async def test_arquivo_invalido_e_regras(oac):
     assert (await ac.get(f"/api/imports/{imp_id}/items", headers=h2)).status_code == 404
 
 
+async def test_arquivo_acima_do_limite(oac, monkeypatch):
+    """Acima de ofx_max_bytes → 413 sem carregar o arquivo inteiro de uma vez."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ofx_max_bytes", 1024)
+    ac, h = oac, await _user(oac, "big")
+    acc = await _account(ac, h)
+    raw = b"OFXHEADER" + b"x" * 2048
+    r = await ac.post("/api/imports/ofx", data={"account_id": str(acc)}, files={"file": ("g.ofx", raw)}, headers=h)
+    assert r.status_code == 413
+
+
 async def test_upload_c6_headers_exoticos(oac):
     """Regressão: OFX estilo C6 (`UTF - 8`, timezone, sem MEMO) valida e classifica."""
     ac, h = oac, await _user(oac, "c6")

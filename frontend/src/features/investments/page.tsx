@@ -85,7 +85,8 @@ function AssetDetail({ asset }: { asset: Asset }) {
     pos != null &&
     (Number(pos.aportes) > 0 ||
       Number(pos.resgates) > 0 ||
-      Number(pos.rendimentos) > 0);
+      Number(pos.rendimentos) > 0 ||
+      Number(pos.reinvestimentos) > 0);
 
   async function onOp(ev: FormEvent) {
     ev.preventDefault();
@@ -321,7 +322,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
         )}
         <Button size="sm">Lançar</Button>
         {contracted && kind === "RESGATE" && (
-          <Button size="sm" variant="danger" onClick={onFullRescue}>Resgatar tudo</Button>
+          <Button size="sm" variant="danger" type="button" onClick={onFullRescue}>Resgatar tudo</Button>
         )}
       </form>
       {(!contracted || (pos && pos.current_price == null)) && (
@@ -441,6 +442,7 @@ export function InvestmentsPage() {
       {pf && (
         <section className="fw-card" style={{ marginBottom: 12 }}>
           <h2 style={{ marginTop: 0 }}>Resumo da carteira</h2>
+          <p style={{ marginTop: 0 }}><small>Escopo global e atual: ignora os filtros de conta/período do Painel.</small></p>
           <div className="fw-metrics">
             <div className="fw-metric"><strong>Caixa nas corretoras</strong><p>{brl(pf.cash)}</p><small>dinheiro disponível para investir</small></div>
             <div className="fw-metric"><strong>Posições</strong><p>{brl(pf.positions_value)}</p><small>quantidade × preço atual</small></div>

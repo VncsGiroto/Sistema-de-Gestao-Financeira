@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import type { Account, Category, TxFilters, TxPage } from "../../lib/api";
+import type { Account, Category, MovementFilters, TxFilters, TxPage } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 
 const STALE = 30_000;
@@ -36,6 +36,8 @@ export function useAccountMutations() {
   const inv = () => {
     qc.invalidateQueries({ queryKey: ["accounts"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["portfolio"] });
+    qc.invalidateQueries({ queryKey: ["movements"] });
   };
   return {
     create: useMutation({ mutationFn: (b: { name: string; bank?: string; account_type: string; initial_balance?: string }) => run((t) => api.accounts.create(b, t)), onSuccess: inv }),
@@ -43,6 +45,10 @@ export function useAccountMutations() {
     remove: useMutation({ mutationFn: (id: number) => run((t) => api.accounts.remove(id, t)), onSuccess: inv }),
     transfer: useMutation({
       mutationFn: (b: { from_account_id: number; to_account_id: number; amount: string }) => run((t) => api.transfers.create(b, t)),
+      onSuccess: inv,
+    }),
+    removeTransfer: useMutation({
+      mutationFn: (id: number) => run((t) => api.transfers.remove(id, t)),
       onSuccess: inv,
     }),
   };
@@ -98,10 +104,34 @@ export function useTxs(f: TxFilters) {
   });
 }
 
+export function useMovements(f: MovementFilters) {
+  const { access, refresh } = useAuth();
+  const { from, to, account_id, kind, page, per_page } = f;
+  return useQuery({
+    queryKey: ["movements", from, to, account_id, kind, page, per_page],
+    queryFn: async () => {
+      if (!access) throw new Error("Sem sessão");
+      return api.authed(
+        (t) => api.movements.list({ from, to, account_id, kind, page, per_page }, t),
+        access,
+        refresh,
+      );
+    },
+    staleTime: STALE,
+    enabled: !!access,
+  });
+}
+
 export function useTxMutations() {
   const qc = useQueryClient();
   const { run } = useAuthed();
-  const inv = () => qc.invalidateQueries({ queryKey: ["txs"] });
+  const inv = () => {
+    qc.invalidateQueries({ queryKey: ["txs"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["accounts"] });
+    qc.invalidateQueries({ queryKey: ["portfolio"] });
+    qc.invalidateQueries({ queryKey: ["movements"] });
+  };
   return {
     create: useMutation({
       mutationFn: (b: { account_id: number; category_id: number | null; date: string; description: string; amount: string; type: string }) =>

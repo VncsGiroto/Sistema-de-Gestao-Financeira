@@ -1,49 +1,65 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../../lib/api";
-import type { TxFilters } from "../../lib/api";
+import type { MovementFilters, MovementItem } from "../../lib/api";
 import { ApiError } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
-import { useAccounts, useCategories, useTxMutations, useTxs } from "./hooks";
+import { useAccountMutations, useAccounts, useCategories, useMovements, useTxMutations } from "./hooks";
 import { Button, Field, PageHeader, useConfirm } from "../../components/ui";
-import { labelOf, txSourceLabel, txTypeLabel } from "../../lib/labels";
+import { labelOf, movementDirectionLabel, movementKindLabel } from "../../lib/labels";
 import { todayISO } from "../../lib/date";
+
+const KINDS = ["INCOME", "EXPENSE", "TRANSFER", "APORTE", "RESGATE", "RENDIMENTO", "REINVESTIMENTO"] as const;
+
+function sides(m: MovementItem, names: Map<number, string>): string {
+  if (m.kind === "TRANSFER") {
+    const from = m.from_account_id ? names.get(m.from_account_id) ?? `#${m.from_account_id}` : "?";
+    const to = m.to_account_id ? names.get(m.to_account_id) ?? `#${m.to_account_id}` : "?";
+    return `${from} → ${to}`;
+  }
+  if (m.account_id) return names.get(m.account_id) ?? `#${m.account_id}`;
+  return m.ticker ? `Ativo ${m.ticker}` : "—";
+}
 
 export function TransactionsPage() {
   const { access, refresh } = useAuth();
-  const [f, setF] = useState<TxFilters>(() => {
+  const [f, setF] = useState<MovementFilters>(() => {
     const q = new URLSearchParams(window.location.search).get("account_id");
     const account_id = q && /^\d+$/.test(q) ? Number(q) : undefined;
     return { page: 1, per_page: 20, account_id };
   });
-  const { data, isLoading } = useTxs(f);
+  const { data, isLoading } = useMovements(f);
   const m = useTxMutations();
+  const ma = useAccountMutations();
   const { data: accounts } = useAccounts();
   const { data: categories } = useCategories();
   const [msg, setMsg] = useState("");
   const confirm = useConfirm();
+  const names = new Map((accounts ?? []).map((a) => [a.id, a.name]));
 
-  async function onDelete(id: number, description: string, source: string) {
+  async function onDelete(mv: MovementItem) {
     setMsg("");
-    const origin = source === "PAYABLE"
-      ? "Ela foi gerada pela baixa de uma conta a pagar — excluí-la não reabre a conta."
-      : source === "OFX" || source === "IMPORT"
-        ? "Ela veio de uma importação de extrato."
-        : "Ela é um lançamento manual.";
+    if (mv.origin === "operation") {
+      setMsg("Gerado por operação de investimento — gerencie pelo ativo em Investimentos.");
+      return;
+    }
     const ok = await confirm.ask({
-      title: "Excluir lançamento?",
-      body: `“${description}” será excluído do extrato. ${origin}`,
-      confirmLabel: "Excluir lançamento",
+      title: mv.origin === "transfer" ? "Reverter transferência?" : "Excluir lançamento?",
+      body: mv.origin === "transfer"
+        ? `“${mv.description}” será revertida dos dois lados.`
+        : `“${mv.description}” será excluído do extrato.`,
+      confirmLabel: mv.origin === "transfer" ? "Reverter" : "Excluir lançamento",
     });
     if (!ok) return;
     try {
-      await m.remove.mutateAsync(id);
+      if (mv.origin === "transfer" && mv.movement_id) await ma.removeTransfer.mutateAsync(mv.movement_id);
+      else if (mv.transaction_id) await m.remove.mutateAsync(mv.transaction_id);
     } catch {
       setMsg("Falha ao excluir.");
     }
   }
 
-  // form criar
+  // form criar (lançamento manual de receita/despesa)
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [date, setDate] = useState(todayISO);
@@ -78,19 +94,19 @@ export function TransactionsPage() {
     setMsg("");
     try {
       if (!access) return;
-      const { from, to, account_id, category_id, type: t, source, min, max, q } = f;
-      await api.downloadCsv({ from, to, account_id, category_id, type: t, source, min, max, q }, access, refresh);
+      const { from, to, account_id, kind } = f;
+      await api.downloadMovementsCsv({ from, to, account_id, kind }, access, refresh);
     } catch {
       setMsg("Falha ao exportar.");
     }
   }
 
-  const set = (k: keyof TxFilters, v: string | number | undefined) =>
+  const set = (k: keyof MovementFilters, v: string | number | undefined) =>
     setF((p) => ({ ...p, [k]: v === "" ? undefined : v, page: 1 }));
 
   return (
     <>
-      <PageHeader title="Movimentações" sub="Receitas e despesas manuais." />
+      <PageHeader title="Movimentações" sub="Receitas, despesas, transferências e operações de investimento — uma linha por evento." />
       {confirm.dialog}
       {msg && <p className="fw-error">{msg}</p>}
 
@@ -141,32 +157,10 @@ export function TransactionsPage() {
             </select>
           </Field>
           <Field label="Tipo">
-            <select className="fw-select" style={{ width: "auto" }} value={f.type ?? ""} onChange={(e) => set("type", e.target.value || undefined)}>
-              <option value="">Tipo...</option>
-              <option value="EXPENSE">Despesa</option>
-              <option value="INCOME">Receita</option>
+            <select className="fw-select" style={{ width: "auto" }} value={f.kind ?? ""} onChange={(e) => set("kind", e.target.value || undefined)}>
+              <option value="">Todos os tipos</option>
+              {KINDS.map((k) => <option key={k} value={k}>{labelOf(movementKindLabel, k)}</option>)}
             </select>
-          </Field>
-          <Field label="Categoria">
-            <select className="fw-select" style={{ width: "auto" }} value={f.category_id ?? ""} onChange={(e) => set("category_id", e.target.value ? Number(e.target.value) : undefined)}>
-              <option value="">Todas as categorias</option>
-              {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} ({labelOf(txTypeLabel, c.type)})</option>)}
-            </select>
-          </Field>
-          <Field label="Origem">
-            <select className="fw-select" style={{ width: "auto" }} value={f.source ?? ""} onChange={(e) => set("source", e.target.value || undefined)}>
-              <option value="">Todas as origens</option>
-              {Object.entries(txSourceLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </Field>
-          <Field label="Valor mín. (R$)">
-            <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={f.min ?? ""} onChange={(e) => set("min", e.target.value || undefined)} />
-          </Field>
-          <Field label="Valor máx. (R$)">
-            <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={f.max ?? ""} onChange={(e) => set("max", e.target.value || undefined)} />
-          </Field>
-          <Field label="Busca">
-            <input className="fw-input" style={{ width: "auto" }} placeholder="Descrição..." value={f.q ?? ""} onChange={(e) => set("q", e.target.value || undefined)} />
           </Field>
           <Button variant="ghost" onClick={onExport}>Exportar CSV</Button>
         </div>
@@ -174,21 +168,31 @@ export function TransactionsPage() {
 
       {isLoading && <p>Carregando...</p>}
       <table className="fw-table">
-        <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Categoria</th><th></th></tr></thead>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Efeito no caixa</th><th>Conta</th><th></th></tr></thead>
         <tbody>
-          {(data?.data ?? []).map((t) => (
-            <tr key={t.id}>
-              <td>{t.date}</td>
-              <td>{t.description}</td>
-              <td>R$ {t.amount}</td>
-              <td>{labelOf(txTypeLabel, t.type)}</td>
+          {(data?.data ?? []).map((mv) => (
+            <tr key={mv.id}>
+              <td>{mv.date}</td>
+              <td>{mv.description}{mv.ticker ? ` (${mv.ticker})` : ""}</td>
+              <td>R$ {mv.amount}</td>
+              <td>{labelOf(movementKindLabel, mv.kind)}</td>
+              <td title={mv.origin_hint}>{labelOf(movementDirectionLabel, mv.direction)}</td>
+              <td>{sides(mv, names)}</td>
               <td>
-                <select className="fw-select" value={t.category_id ?? ""} onChange={(e) => onInlineCategory(t.id, e.target.value)}>
-                  <option value="">—</option>
-                  {(categories ?? []).filter((c) => c.type === t.type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                {mv.origin === "transaction" && mv.transaction_id && (mv.kind === "INCOME" || mv.kind === "EXPENSE") ? (
+                  <select className="fw-select" value={mv.category_id ?? ""} onChange={(e) => onInlineCategory(mv.transaction_id!, e.target.value)}>
+                    <option value="">—</option>
+                    {(categories ?? []).filter((c) => c.type === mv.kind).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                ) : null}
+                {mv.origin === "operation" ? (
+                  <small title={mv.origin_hint}>via operação</small>
+                ) : (
+                  <Button size="sm" variant="danger" onClick={() => onDelete(mv)}>
+                    {mv.origin === "transfer" ? "Reverter" : "Excluir"}
+                  </Button>
+                )}
               </td>
-              <td><Button size="sm" variant="danger" onClick={() => onDelete(t.id, t.description, t.source)}>Excluir</Button></td>
             </tr>
           ))}
         </tbody>

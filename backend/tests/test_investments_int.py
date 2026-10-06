@@ -237,6 +237,130 @@ async def test_aporte_concorrente_caixa(iac):
     assert (await ac.get(f"/api/accounts/{br}", headers=h)).json()["current_balance"] == "0.00"
 
 
+async def test_resgate_concorrente_posicao(iac):
+    """Dois resgates que cabem sozinhos mas não juntos: só um pode passar (revalidação pós-lock)."""
+    import asyncio as aio
+
+    ac, h = iac, await _user(iac, "racer")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "1000.00")
+    aid = (await _mk_asset(ac, h, "RACE2", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100.00"})
+
+    async def resgate():
+        return await ac.post(
+            f"/api/assets/{aid}/ops",
+            json={"kind": "RESGATE", "date": "2026-02-10", "quantity": "8", "price": "100.00"},
+            headers=h,
+        )
+
+    r1, r2 = await aio.gather(resgate(), resgate())
+    assert sorted([r1.status_code, r2.status_code]) == [201, 422]
+    p = (await ac.get(f"/api/assets/{aid}/position", headers=h)).json()
+    assert Decimal(p["quantity"]) == 2
+
+
+async def test_rendimento_tx_protegida(iac):
+    """Transação espelhada por RENDIMENTO não aceita PATCH/DELETE direto; sai junto com a op."""
+    ac, h = iac, await _user(iac, "rendlock")
+    acc = await _mk_account(ac, h, "Corrente", "CHECKING")
+    aid = (await _mk_asset(ac, h, "DIV1", None, asset_class="RENDA_VARIAVEL", subtype="ACAO")).json()["id"]
+    r = await ac.post(
+        f"/api/assets/{aid}/ops",
+        json={"kind": "RENDIMENTO", "date": "2026-03-01", "amount": "25.00", "account_id": acc},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    op_id, tx_id = r.json()["id"], r.json()["transaction_id"]
+    assert tx_id is not None
+    assert (await ac.patch(f"/api/transactions/{tx_id}", json={"amount": "99.00"}, headers=h)).status_code == 422
+    assert (await ac.patch(f"/api/transactions/{tx_id}", json={"description": "outra"}, headers=h)).status_code == 422
+    assert (await ac.delete(f"/api/transactions/{tx_id}", headers=h)).status_code == 422
+    assert (await ac.delete(f"/api/assets/{aid}/ops/{op_id}", headers=h)).status_code == 204
+    assert (await ac.get(f"/api/transactions/{tx_id}", headers=h)).status_code == 404
+
+
+async def test_carteira_rendimento_nao_e_aporte_externo(iac):
+    """Rendimento em conta INVESTMENT é retorno interno: não entra no capital externo."""
+    ac, h = iac, await _user(iac, "extflow")
+    cc = await _mk_account(ac, h, "Corrente", "CHECKING", "5000.00")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT")
+    aid = (await _mk_asset(ac, h, "EXT1", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    r = await ac.post(
+        "/api/transfers", json={"from_account_id": cc, "to_account_id": br, "amount": "1000.00"}, headers=h
+    )
+    assert r.status_code == 201, r.text
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100.00"})
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-02-01", "price": "110.00"}, headers=h)
+    await _op(ac, h, aid, {"kind": "RENDIMENTO", "date": "2026-02-15", "amount": "100.00", "account_id": br})
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    assert pf["net_invested"] == "1000.00"  # só a transferência externa
+    assert pf["total"] == "1200.00" and pf["resultado"] == "200.00"
+
+
+async def test_snapshot_retroativo_asof(iac):
+    """Op retroativa gera snapshot histórico sem vazar ops/preços futuros."""
+    ac, h = iac, await _user(iac, "asof")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "1500.00")
+    aid = (await _mk_asset(ac, h, "ASOF1", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-03-01", "quantity": "10", "price": "100.00"})
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-03-01", "price": "100.00"}, headers=h)
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-01", "quantity": "5", "price": "100.00"})
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    by_date = {s["date"]: s for s in pf["snapshots"]}
+    assert by_date["2026-01-01"]["total"] == "1000.00"  # caixa 1000, sem cotação até então
+    assert by_date["2026-03-01"]["total"] == "1500.00"
+
+
+async def test_patch_account_id_com_historico(iac):
+    """Ativo com operações não troca de conta vinculada (posição × caixa separariam)."""
+    ac, h = iac, await _user(iac, "acctie")
+    br1 = await _mk_account(ac, h, "Corretora A", "INVESTMENT", "1000.00")
+    br2 = await _mk_account(ac, h, "Corretora B", "INVESTMENT")
+    aid = (await _mk_asset(ac, h, "TIE1", br1, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100.00"})
+    r = await ac.patch(f"/api/assets/{aid}", json={"account_id": br2}, headers=h)
+    assert r.status_code == 422
+    free = (await _mk_asset(ac, h, "TIE2", None, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    r = await ac.patch(f"/api/assets/{free}", json={"account_id": br2}, headers=h)
+    assert r.status_code == 200 and r.json()["account_id"] == br2
+
+
+async def test_posicao_ignora_op_futura(iac):
+    """Aporte futuro (classes sem contrato aceitam) não entra na posição 'atual'."""
+    from datetime import date, timedelta
+
+    ac, h = iac, await _user(iac, "futop")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "1000.00")
+    aid = (await _mk_asset(ac, h, "FUT1", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    await _op(ac, h, aid, {"kind": "APORTE", "date": tomorrow, "quantity": "10", "price": "100.00"})
+    p = (await ac.get(f"/api/assets/{aid}/position", headers=h)).json()
+    assert Decimal(p["quantity"]) == 0 and p["invested"] == "0.00"
+
+
+async def test_tx_manual_em_corretora_atualiza_snapshot(iac):
+    """INCOME/EXPENSE manual em conta INVESTMENT entra nos fluxos → atualiza a série."""
+    from datetime import date
+
+    ac, h = iac, await _user(iac, "snaptx")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT")
+    r = await ac.post(
+        "/api/transactions",
+        json={
+            "account_id": br,
+            "date": "2026-09-05",
+            "description": "APORTE EXTERNO",
+            "amount": "500",
+            "type": "INCOME",
+        },
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    assert pf["net_invested"] == "500.00"
+    assert any(s["date"] == date.today().isoformat() for s in pf["snapshots"])
+
+
 async def test_rendimento_categoria_incompativel(iac):
     """0.2: rendimento espelha INCOME — categoria EXPENSE (explícita ou do ativo) → 422."""
     ac, h = iac, await _user(iac, "inccat")
@@ -441,6 +565,10 @@ async def test_rf_accrual_com_cdi_mockado(iac, monkeypatch):
     assert p["price_source"] == "ACCRUAL", p
     # 25, 26(sex?) ...: valor > 1000 pelo CDI 0.05%/du
     assert Decimal(p["current_value"]) > Decimal("1000")
+
+    # snapshot do accrual persiste na operação com commit (não em leitura GET)
+    r = await ac.get(f"/api/assets/{aid}/prices", headers=h)
+    assert any(x["source"] == "ACCRUAL" for x in r.json()), r.text
 
     # IPCA_MAIS cai para manual (sem preço → nulos)
     r = await ac.post(

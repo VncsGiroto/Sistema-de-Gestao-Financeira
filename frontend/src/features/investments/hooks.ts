@@ -61,6 +61,10 @@ export function useAssetMutations() {
     qc.invalidateQueries({ queryKey: ["position"] });
     qc.invalidateQueries({ queryKey: ["returns"] });
     qc.invalidateQueries({ queryKey: ["txs"] });
+    qc.invalidateQueries({ queryKey: ["portfolio"] });
+    qc.invalidateQueries({ queryKey: ["accounts"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["movements"] });
   };
   return {
     create: useMutation({ mutationFn: (b: AssetBody) => run((t) => api.assets.create(b, t)), onSuccess: inv }),

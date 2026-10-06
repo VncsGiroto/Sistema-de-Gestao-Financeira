@@ -20,6 +20,22 @@ export const txSourceLabel: Record<string, string> = {
   PAYABLE: "Conta paga",
 };
 
+export const movementKindLabel: Record<string, string> = {
+  INCOME: "Receita",
+  EXPENSE: "Despesa",
+  TRANSFER: "Transferência",
+  APORTE: "Aporte",
+  RESGATE: "Resgate",
+  RENDIMENTO: "Rendimento",
+  REINVESTIMENTO: "Reinvestimento",
+};
+
+export const movementDirectionLabel: Record<string, string> = {
+  in: "Entrada",
+  out: "Saída",
+  neutral: "Sem efeito no caixa",
+};
+
 export const billKindLabel: Record<string, string> = {
   FIXED: "Fixa",
   VARIABLE: "Variável",

@@ -173,6 +173,21 @@ async def pay(
     discount,
 ) -> list[Transaction]:
     """Baixa a conta gerando transação(ões) source=PAYABLE. Retorna as txs criadas."""
+    # Lock pessimista na linha: duas baixas concorrentes precisam se serializar
+    # antes das verificações de estado (pago/não-pago, parcelas). populate_existing
+    # garante atributos frescos: o objeto pode já estar no identity map da sessão
+    # (carregado pelo router antes de chamar pay).
+    locked = (
+        await session.execute(
+            select(Payable)
+            .where(Payable.id == row.id, Payable.user_id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if locked is None:
+        raise LookupError("payable")
+    row = locked
     account = await _owned(session, Account, user_id, account_id)
     if account is None:
         raise LookupError("account")

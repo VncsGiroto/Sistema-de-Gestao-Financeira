@@ -3,6 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,16 +11,24 @@ from app.modules.finance import repository as finance_repo
 from app.modules.finance.models import Transaction
 from app.modules.investments import repository as inv_repo
 from app.modules.investments import returns as ret
-from app.modules.investments.models import PortfolioSnapshot
+from app.modules.investments.models import InvestmentOp, PortfolioSnapshot
 from app.modules.ledger.models import LedgerMovement
+from app.modules.market import bcb
 from app.modules.market.prices import resolve_price
 
 
-async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | None = None) -> dict:
-    """Agrega caixa das contas INVESTMENT + posições avaliadas. Sem média de rentabilidades."""
+async def compute_portfolio(
+    session: AsyncSession, user_id: int, ref: date | None = None, persist_prices: bool = False
+) -> dict:
+    """Agrega caixa das contas INVESTMENT + posições avaliadas. Sem média de rentabilidades.
+
+    Tudo é calculado "na data de referência": operações, transações, ledger,
+    snapshots e preços com data posterior a `ref` são ignorados. `persist_prices`
+    grava snapshots do accrual (só em operações com commit; GETs usam False).
+    """
     ref = ref or date.today()
     accounts = await finance_repo.list_accounts(session, user_id)
-    sums = await finance_repo.account_summaries(session, user_id)
+    sums = await finance_repo.account_summaries(session, user_id, ref)
     cash = Decimal("0")
     patrimonio_cash = Decimal("0")
     by_account: dict[int, dict] = {}
@@ -39,15 +48,15 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
     aportes = reinvest = resgates = rendimentos = Decimal("0")
     unpriced: list[str] = []
     for asset in assets:
-        pos = await inv_repo.get_position(session, user_id, asset.id)
+        pos = await inv_repo.get_position(session, user_id, asset.id, ref)
         aportes += pos["aportes"]
         reinvest += pos["reinvestimentos"]
         resgates += pos["resgates"]
         rendimentos += pos["rendimentos"]
         try:
-            cur = await resolve_price(session, asset, ref)
-        except Exception:
-            cur = None  # fail-open: preço nunca quebra a consolidação (vira sem-cotação)
+            cur = await resolve_price(session, asset, ref, persist_prices)
+        except (bcb.BcbError, httpx.HTTPError):
+            cur = None  # fail-open só p/ falha do provedor; erro de banco/programação propaga
         value = (cur.price * pos["quantity"]).quantize(Decimal("0.01")) if cur and pos["quantity"] > 0 else None
         if value is None:
             if pos["quantity"] > 0:
@@ -81,17 +90,36 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
     ext: list[tuple[date, Decimal]] = []
     if inv_ids:
         led = await session.execute(
-            select(LedgerMovement).where(LedgerMovement.user_id == user_id, LedgerMovement.kind == "TRANSFER")
+            select(LedgerMovement).where(
+                LedgerMovement.user_id == user_id,
+                LedgerMovement.kind == "TRANSFER",
+                LedgerMovement.date <= ref,
+            )
         )
         for m in led.scalars().all():
             if m.to_account_id in inv_ids and m.from_account_id not in inv_ids:
                 ext.append((m.date, Decimal(m.amount)))
             elif m.from_account_id in inv_ids and m.to_account_id not in inv_ids:
                 ext.append((m.date, -Decimal(m.amount)))
+        # Receitas espelhadas por RENDIMENTO são retorno interno, não aporte externo.
+        linked = await session.execute(
+            select(InvestmentOp.transaction_id).where(
+                InvestmentOp.user_id == user_id,
+                InvestmentOp.transaction_id.is_not(None),
+                InvestmentOp.date <= ref,
+            )
+        )
+        linked_ids = {tx_id for (tx_id,) in linked.all()}
         txs = await session.execute(
-            select(Transaction).where(Transaction.user_id == user_id, Transaction.account_id.in_(inv_ids))
+            select(Transaction).where(
+                Transaction.user_id == user_id,
+                Transaction.account_id.in_(inv_ids),
+                Transaction.date <= ref,
+            )
         )
         for t in txs.scalars().all():
+            if t.id in linked_ids:
+                continue
             ext.append((t.date, Decimal(t.amount) if t.type == "INCOME" else -Decimal(t.amount)))
     ext_in = sum((a for _, a in ext if a > 0), Decimal("0"))
     ext_out = -sum((a for _, a in ext if a < 0), Decimal("0"))
@@ -106,7 +134,9 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
     # TWR da carteira: unitiza a série de snapshots com fluxos alocados no primeiro
     # snapshot na data ou após cada fluxo (aproximação documentada e esparsa).
     snaps = await session.execute(
-        select(PortfolioSnapshot).where(PortfolioSnapshot.user_id == user_id).order_by(PortfolioSnapshot.date)
+        select(PortfolioSnapshot)
+        .where(PortfolioSnapshot.user_id == user_id, PortfolioSnapshot.date <= ref)
+        .order_by(PortfolioSnapshot.date)
     )
     snap_rows = list(snaps.scalars().all())
     twr = None
@@ -147,7 +177,7 @@ async def compute_portfolio(session: AsyncSession, user_id: int, ref: date | Non
 async def upsert_snapshot(session: AsyncSession, user_id: int, on: date | None = None) -> None:
     """Upsert do snapshot do dia com flush (sem commit: mesma transação do chamador)."""
     on = on or date.today()
-    data = await compute_portfolio(session, user_id, on)
+    data = await compute_portfolio(session, user_id, on, persist_prices=True)
     res = await session.execute(
         select(PortfolioSnapshot).where(PortfolioSnapshot.user_id == user_id, PortfolioSnapshot.date == on)
     )

@@ -42,3 +42,6 @@
 - [x] 7.5 UI investimentos + E2E (DoD: E2E com provider mockado)
 
 Commits: Conventional Commits EN (`feat:`, `fix:`, ...). Issues em PT.
+
+## Investigação futura — submit fantasma no form de operações (E2E)
+- [ ] Ao lançar operações em rajada via UI (troca rápida de kind + Lançar sem espera), um `POST /prices` com o preço da operação aparece no histórico de rede sem clique no Precificar, criando `AssetPrice MANUAL` espúria. Determinístico no E2E `movements.spec` (que por isso semeia ops via API); mecanismo não isolado após instrumentação (fills corretos, forms irmãos, sem cross-wiring em `page.tsx`). Hipóteses em aberto: evento de submit duplicado no clique sob re-render concorrente, ou misfill via reconciliação. DoD: reproduzir isolado com log de submissões por form + eliminar a causa (candidatos: `type` explícito já existe no Resgatar-tudo; escopo de queries; `key` por kind testado sem efeito).

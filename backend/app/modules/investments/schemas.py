@@ -142,21 +142,24 @@ class PortfolioAccountOut(BaseModel):
 class PortfolioSnapshotOut(BaseModel):
     date: date_t
     cash: Decimal
-    positions_value: Decimal
-    total: Decimal
+    positions_value: Decimal | None = None
+    total: Decimal | None = None
+    status: str = "UNKNOWN"
+    unpriced: list[str] = []
 
 
 class PortfolioOut(BaseModel):
     cash: Decimal
-    positions_value: Decimal
-    total: Decimal
-    patrimonio: Decimal
+    positions_value: Decimal | None = None
+    total: Decimal | None = None
+    patrimonio: Decimal | None = None
+    status: str = "UNKNOWN"
     aportes: Decimal
     reinvestimentos: Decimal
     resgates: Decimal
     rendimentos: Decimal
     net_invested: Decimal
-    resultado: Decimal
+    resultado: Decimal | None = None
     xirr: Decimal | None = None
     twr: Decimal | None = None
     positions: list[PortfolioPositionOut]

@@ -1,7 +1,18 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -63,12 +74,17 @@ class PortfolioSnapshot(Base):
     """
 
     __tablename__ = "portfolio_snapshots"
-    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_snap_user_date"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_snap_user_date"),
+        CheckConstraint("status IN ('COMPLETE','INCOMPLETE','UNKNOWN')", name="ck_snap_status"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     cash: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    positions_value: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    positions_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    total: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="UNKNOWN")
+    unpriced: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

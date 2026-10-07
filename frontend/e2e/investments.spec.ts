@@ -81,7 +81,12 @@ test("investments: RF com contrato opera em valor, sem cota", async ({ page }) =
 
   // detalha e aporta em reais (primeiro aporte usa cotação 1, sem BCB)
   await page.getByRole("button", { name: /detalhar/i }).click();
-  await page.getByRole("textbox", { name: "Valor (R$)" }).fill("1000");
-  await page.getByRole("button", { name: /^lançar$/i }).click();
+  const rfvForm = page.locator("form", { has: page.getByRole("button", { name: /^lançar$/i }) });
+  await rfvForm.getByRole("textbox", { name: "Valor (R$)" }).fill("1000");
+  const [resp] = await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith("/ops") && r.request().method() === "POST"),
+    rfvForm.getByRole("button", { name: /^lançar$/i }).click(),
+  ]);
+  if (resp.status() !== 201) throw new Error(`aporte RF falhou: ${resp.status()}`);
   await expect(page.getByText(/aplicado R\$\s1\.000,00/i)).toBeVisible({ timeout: 15000 });
 });

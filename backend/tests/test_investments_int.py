@@ -100,13 +100,16 @@ async def test_vinculo_conta_e_caixa(iac):
     assert Decimal(p["quantity"]) == 10 and p["invested"] == "1000.00"
 
     pf = (await ac.get("/api/portfolio", headers=h)).json()
-    assert pf["cash"] == "0.00" and pf["aportes"] == "1000.00" and pf["total"] == "0.00"  # sem preço ainda
+    assert pf["cash"] == "0.00" and pf["aportes"] == "1000.00"
+    assert pf["total"] is None and pf["status"] == "INCOMPLETE"  # sem preço: parcial, nunca zero
+    assert pf["unpriced"] == ["VALE3"]
     assert pf["history_since"] is not None  # snapshot sob evento
 
     # preço manual → posição avaliada; patrimônio = caixa + posições, sem dupla contagem
     await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-02-01", "price": "110.00"}, headers=h)
     pf = (await ac.get("/api/portfolio", headers=h)).json()
     assert pf["positions_value"] == "1100.00" and pf["total"] == "1100.00" and pf["resultado"] == "100.00"
+    assert pf["status"] == "COMPLETE"
     assert pf["unpriced"] == [] and len(pf["snapshots"]) >= 1  # upsert por dia: eventos do mesmo dia colapsam
 
     # resgate devolve o caixa
@@ -307,7 +310,9 @@ async def test_snapshot_retroativo_asof(iac):
     await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-01", "quantity": "5", "price": "100.00"})
     pf = (await ac.get("/api/portfolio", headers=h)).json()
     by_date = {s["date"]: s for s in pf["snapshots"]}
-    assert by_date["2026-01-01"]["total"] == "1000.00"  # caixa 1000, sem cotação até então
+    snap_jan = by_date["2026-01-01"]
+    assert snap_jan["total"] is None and snap_jan["status"] == "INCOMPLETE"  # 5 cotas sem cotação: lacuna, não zero
+    assert snap_jan["unpriced"] == ["ASOF1"] and snap_jan["cash"] == "1000.00"
     assert by_date["2026-03-01"]["total"] == "1500.00"
 
 
@@ -359,6 +364,70 @@ async def test_tx_manual_em_corretora_atualiza_snapshot(iac):
     pf = (await ac.get("/api/portfolio", headers=h)).json()
     assert pf["net_invested"] == "500.00"
     assert any(s["date"] == date.today().isoformat() for s in pf["snapshots"])
+
+
+async def test_snapshot_parcial_e_retomada(iac):
+    """Um ativo cotado + outro sem cotação: caixa visível, total null; com preço, COMPLETE."""
+    ac, h = iac, await _user(iac, "gap")
+    cc = await _mk_account(ac, h, "Corrente", "CHECKING", "5000.00")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT")
+    r = await ac.post(
+        "/api/transfers", json={"from_account_id": cc, "to_account_id": br, "amount": "1500.00"}, headers=h
+    )
+    assert r.status_code == 201, r.text
+    a1 = (await _mk_asset(ac, h, "COT1", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    a2 = (await _mk_asset(ac, h, "SEM1", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    await _op(ac, h, a1, {"kind": "APORTE", "date": "2026-04-01", "quantity": "10", "price": "100.00"})
+    await _op(ac, h, a2, {"kind": "APORTE", "date": "2026-04-01", "quantity": "5", "price": "100.00"})
+    await ac.post(f"/api/assets/{a1}/prices", json={"date": "2026-04-01", "price": "110.00"}, headers=h)
+
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    assert pf["cash"] == "0.00"  # caixa continua conhecido
+    assert pf["positions_value"] is None and pf["total"] is None and pf["resultado"] is None
+    assert pf["status"] == "INCOMPLETE" and pf["unpriced"] == ["SEM1"]
+    assert pf["xirr"] is None
+    snap = [s for s in pf["snapshots"] if s["date"] == "2026-04-01"][0]
+    assert snap["total"] is None and snap["status"] == "INCOMPLETE"
+
+    # cotou tudo: linhas retomadas
+    await ac.post(f"/api/assets/{a2}/prices", json={"date": "2026-04-02", "price": "120.00"}, headers=h)
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    assert pf["status"] == "COMPLETE" and pf["total"] == "1700.00" and pf["resultado"] == "200.00"
+
+
+async def test_posicao_zerada_sem_preco_nao_marca_incompleto(iac):
+    """Ativo resgatado por completo sem cotação: snapshot segue COMPLETE."""
+    ac, h = iac, await _user(iac, "zeroq")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "1000.00")
+    aid = (await _mk_asset(ac, h, "ZERO1", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-05-01", "quantity": "10", "price": "100.00"})
+    await _op(ac, h, aid, {"kind": "RESGATE", "date": "2026-05-02", "quantity": "10", "price": "100.00"})
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    assert pf["status"] == "COMPLETE" and pf["unpriced"] == [] and pf["total"] == "1000.00"
+
+
+async def test_snapshot_legacy_aparece_como_unknown(iac):
+    """Linha escrita sem avaliação (defaults do model) aparece como UNKNOWN e sai do TWR."""
+    from datetime import date as date_t
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.modules.investments.models import PortfolioSnapshot
+    from tests.test_auth_int import DB_URL
+
+    ac, h = iac, await _user(iac, "legacy")
+    me = (await ac.get("/api/auth/me", headers=h)).json()
+    engine = create_async_engine(DB_URL)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as s:
+            s.add(PortfolioSnapshot(user_id=me["id"], date=date_t(2020, 1, 1), cash=100, positions_value=50, total=150))
+            await s.commit()
+    finally:
+        await engine.dispose()
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    legacy = [s for s in pf["snapshots"] if s["date"] == "2020-01-01"][0]
+    assert legacy["status"] == "UNKNOWN"
+    assert pf["twr"] is None  # sem 2 pontos COMPLETE, sem TWR inventado
 
 
 async def test_rendimento_categoria_incompativel(iac):

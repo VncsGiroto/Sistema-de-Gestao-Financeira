@@ -79,9 +79,14 @@ async def compute_portfolio(
                 "value": value,
             }
         )
-    positions_value = sum((p["value"] for p in positions if p["value"] is not None), Decimal("0"))
-    total = cash + positions_value
-    patrimonio = patrimonio_cash + positions_value
+    priced_value = sum((p["value"] for p in positions if p["value"] is not None), Decimal("0"))
+    # Avaliação parcial não é patrimônio: com posição ativa sem cotação, posições e
+    # total são null (nunca zero). Só o caixa é conhecido.
+    incomplete = len(unpriced) > 0
+    status = "INCOMPLETE" if incomplete else "COMPLETE"
+    positions_value = None if incomplete else priced_value
+    total = None if incomplete else cash + priced_value
+    patrimonio = None if incomplete else patrimonio_cash + priced_value
 
     # Fluxos externos à boundary INVESTMENT (+entra, −sai): transferências que cruzam a
     # boundary e INCOME/EXPENSE direto em conta INVESTMENT. Operações internas (aporte da
@@ -124,36 +129,50 @@ async def compute_portfolio(
     ext_in = sum((a for _, a in ext if a > 0), Decimal("0"))
     ext_out = -sum((a for _, a in ext if a < 0), Decimal("0"))
     net_invested = ext_in - ext_out
-    resultado = total + ext_out - ext_in
+    resultado = None if total is None else total + ext_out - ext_in
 
     xirr_flows = [(d, -a) for d, a in ext]
-    if total > 0:
+    if total is not None and total > 0:
         xirr_flows.append((ref, total))
-    xirr = ret.xirr(xirr_flows)
+    xirr = ret.xirr(xirr_flows) if total is not None else None
 
     # TWR da carteira: unitiza a série de snapshots com fluxos alocados no primeiro
     # snapshot na data ou após cada fluxo (aproximação documentada e esparsa).
+    # Só pontos COMPLETE entram: INCOMPLETE/UNKNOWN viram lacuna, nunca zero.
     snaps = await session.execute(
         select(PortfolioSnapshot)
         .where(PortfolioSnapshot.user_id == user_id, PortfolioSnapshot.date <= ref)
         .order_by(PortfolioSnapshot.date)
     )
     snap_rows = list(snaps.scalars().all())
+    complete = [s for s in snap_rows if s.status == "COMPLETE"]
     twr = None
-    if len(snap_rows) >= 2:
-        events = [{"date": snap_rows[0].date, "flow": Decimal("0"), "value": Decimal(snap_rows[0].total)}]
-        for prev, snap in zip(snap_rows, snap_rows[1:]):
+    if len(complete) >= 2:
+        # COMPLETE implica total presente (upsert grava os dois juntos).
+        assert complete[0].total is not None
+        events = [{"date": complete[0].date, "flow": Decimal("0"), "value": Decimal(complete[0].total)}]
+        for prev, snap in zip(complete, complete[1:]):
+            assert prev.total is not None and snap.total is not None
             flow = sum((a for d, a in ext if prev.date < d <= snap.date), Decimal("0"))
             events.append({"date": snap.date, "flow": flow, "value": Decimal(snap.total) - flow})
         twr = ret.unitize(events)
     snapshots = [
-        {"date": s.date, "cash": s.cash, "positions_value": s.positions_value, "total": s.total} for s in snap_rows
+        {
+            "date": s.date,
+            "cash": s.cash,
+            "positions_value": s.positions_value,
+            "total": s.total,
+            "status": s.status,
+            "unpriced": list(s.unpriced or []),
+        }
+        for s in snap_rows
     ]
     return {
         "cash": cash,
         "positions_value": positions_value,
         "total": total,
         "patrimonio": patrimonio,
+        "status": status,
         "aportes": aportes,
         "reinvestimentos": reinvest,
         "resgates": resgates,
@@ -188,6 +207,8 @@ async def upsert_snapshot(session: AsyncSession, user_id: int, on: date | None =
     row.cash = data["cash"]
     row.positions_value = data["positions_value"]
     row.total = data["total"]
+    row.status = data["status"]
+    row.unpriced = data["unpriced"]
     await session.flush()
 
 

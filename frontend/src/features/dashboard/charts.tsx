@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
-import type { DashboardData } from "../../lib/api";
+import type { DashboardData, PortfolioSnapshot } from "../../lib/api";
 
 const FONT = "Inter, system-ui, sans-serif";
 const GREEN = "#059669";
@@ -92,23 +92,80 @@ export function CategorySummary({ title, items }: { title: string; items: { name
   );
 }
 
-/** Linha de evolução; sem 2+ pontos, mensagem honesta em vez de gráfico vazio. */
-export function SnapshotsLine(
-  { snapshots }: { snapshots: { date: string; cash: string; positions_value: string; total: string }[] },
-) {
+/** Conversão pura snapshot → séries: posições/total só entram quando COMPLETE.
+ *  Pontos INCOMPLETE/UNKNOWN (mesmo com números legados) viram lacuna, nunca zero. */
+export interface ChartSeries {
+  cash: number[];
+  positions: (number | null)[];
+  total: (number | null)[];
+  hasGaps: boolean;
+}
+
+export function toChartSeries(snapshots: PortfolioSnapshot[]): ChartSeries {
+  const priced = (v: string | null) => (v == null ? null : Number(v));
+  const complete = (s: PortfolioSnapshot) => s.status === "COMPLETE";
+  return {
+    cash: snapshots.map((s) => Number(s.cash)),
+    positions: snapshots.map((s) => (complete(s) ? priced(s.positions_value) : null)),
+    total: snapshots.map((s) => (complete(s) ? priced(s.total) : null)),
+    hasGaps: snapshots.some((s) => !complete(s)),
+  };
+}
+
+/** Tooltip de um ponto: usa a série convertida (mesma fonte das linhas), de modo
+ *  que ponto sem avaliação mostra "—" em posições/total, nunca números legados. */
+export function formatSnapshotTip(
+  s: PortfolioSnapshot,
+  positions: number | null,
+  total: number | null,
+): string {
+  const money = (v: number | null) => (v == null ? "—" : moneyFmt(v));
+  let html = `${s.date}<br/>Caixa: ${moneyFmt(Number(s.cash))}<br/>Posições: ${money(positions)}<br/>Total: ${money(total)}`;
+  if (s.status !== "COMPLETE") {
+    const why = s.status === "UNKNOWN"
+      ? "histórico sem avaliação registrada"
+      : `sem cotação: ${(s.unpriced ?? []).join(", ")}`;
+    html += `<br/>(${why})`;
+  }
+  return html;
+}
+
+/** Linha de evolução; null abre lacuna (nunca zero): pontos sem cotação completa
+ *  não conectam as linhas de posições/total. Sem 2+ pontos, mensagem honesta. */
+export function SnapshotsLine({ snapshots }: { snapshots: PortfolioSnapshot[] }) {
+  const series = toChartSeries(snapshots);
   const ref = useChart(
     snapshots.length >= 2
       ? {
         textStyle: { fontFamily: FONT },
-        tooltip: { trigger: "axis", valueFormatter: (v: unknown) => moneyFmt(Number(v as number)) },
+        tooltip: {
+          trigger: "axis",
+          formatter: (params: unknown) => {
+            const rows = Array.isArray(params) ? params : [params];
+            const idx = (rows[0] as { dataIndex?: number })?.dataIndex ?? 0;
+            return formatSnapshotTip(snapshots[idx], series.positions[idx] ?? null, series.total[idx] ?? null);
+          },
+        },
         legend: { data: ["Caixa", "Posições", "Total"], textStyle: { color: SLATE }, bottom: 0 },
         grid: { left: 8, right: 8, top: 24, bottom: 52, containLabel: true },
         xAxis: { type: "category", data: snapshots.map((s) => s.date), axisLine: { lineStyle: { color: "#e2e8f0" } }, axisLabel: { color: SLATE } },
         yAxis: { type: "value", splitLine: { lineStyle: { color: "#eef2f0" } }, axisLabel: { color: SLATE } },
         series: [
-          { name: "Caixa", type: "line", data: snapshots.map((s) => Number(s.cash)), itemStyle: { color: SLATE } },
-          { name: "Posições", type: "line", data: snapshots.map((s) => Number(s.positions_value)), itemStyle: { color: "#2563eb" } },
-          { name: "Total", type: "line", data: snapshots.map((s) => Number(s.total)), itemStyle: { color: GREEN } },
+          { name: "Caixa", type: "line", data: series.cash, itemStyle: { color: SLATE } },
+          {
+            name: "Posições",
+            type: "line",
+            connectNulls: false,
+            data: series.positions,
+            itemStyle: { color: "#2563eb" },
+          },
+          {
+            name: "Total",
+            type: "line",
+            connectNulls: false,
+            data: series.total,
+            itemStyle: { color: GREEN },
+          },
         ],
       }
       : null,
@@ -116,5 +173,10 @@ export function SnapshotsLine(
   if (snapshots.length < 2) {
     return <p>Ainda não há histórico suficiente para o gráfico — ele aparece após movimentações em dias diferentes.</p>;
   }
-  return <div ref={ref} style={{ width: "100%", height: 300 }} />;
+  return (
+    <>
+      <div ref={ref} style={{ width: "100%", height: 300 }} />
+      {series.hasGaps && <p><small>Lacunas = dias sem cotação completa (posições/total indisponíveis, nunca zero).</small></p>}
+    </>
+  );
 }

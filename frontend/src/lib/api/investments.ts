@@ -82,24 +82,34 @@ export interface PortfolioPosition {
   value: string | null;
 }
 
+export interface PortfolioSnapshot {
+  date: string;
+  cash: string;
+  positions_value: string | null;
+  total: string | null;
+  status: string;
+  unpriced: string[];
+}
+
 export interface Portfolio {
   cash: string;
-  positions_value: string;
-  total: string;
-  patrimonio: string;
+  positions_value: string | null;
+  total: string | null;
+  patrimonio: string | null;
+  status: string;
   aportes: string;
   reinvestimentos: string;
   resgates: string;
   rendimentos: string;
   net_invested: string;
-  resultado: string;
+  resultado: string | null;
   xirr: string | null;
   twr: string | null;
   positions: PortfolioPosition[];
   unpriced: string[];
   by_class: { name: string; total: string }[];
   by_account: { account_id: number; name: string; cash: string; value: string }[];
-  snapshots: { date: string; cash: string; positions_value: string; total: string }[];
+  snapshots: PortfolioSnapshot[];
   history_since: string | null;
 }
 

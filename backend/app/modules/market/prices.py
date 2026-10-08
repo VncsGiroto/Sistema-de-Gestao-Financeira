@@ -60,9 +60,11 @@ class AccrualProvider(PriceProvider):
                     return None
         if not lots:
             return None
+        # Sem dias úteis a apropriar (ex.: cotação no próprio dia do aporte), o fator é 1
+        # por definição: não consulta o BCB, evitando INCOMPLETE por falha de rede.
         start = min(lot["date"] for lot in lots)
         cdi = {}
-        if rate_type == "CDI_PCT":
+        if rate_type == "CDI_PCT" and any(acc_mod.business_days(lot["date"], ref) for lot in lots):
             try:
                 cdi = await bcb.cdi_range(start, ref)
             except bcb.BcbError:

@@ -703,3 +703,85 @@ async def test_returns_com_benchmarks_mockados(iac, monkeypatch):
     r = await ac.post("/api/assets", json={"ticker": "VAZ7", "asset_class": "OUTROS", "subtype": "OUTRO"}, headers=h)
     r = await ac.get(f"/api/assets/{r.json()['id']}/returns", headers=h)
     assert r.status_code == 200 and r.json()["simple"] is None and r.json()["xirr"] is None
+
+
+async def test_rf_primeiro_aporte_sem_bcb(iac, monkeypatch):
+    """Cotação no próprio dia do aporte é 1,0 por definição: BCB fora não gera INCOMPLETE."""
+    from app.modules.market import bcb
+
+    async def boom(start, end, timeout_s=15, client=None):
+        raise bcb.BcbError("fora")
+
+    monkeypatch.setattr(bcb, "cdi_range", boom)
+
+    ac, h = iac, await _user(iac, "rfday1")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "10000.00")
+    aid = (
+        await _mk_asset(ac, h, "CDBD1", br, asset_class="RENDA_FIXA", subtype="CDB", rate_type="CDI_PCT", rate="115")
+    ).json()["id"]
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-03-01", "amount": "5172.45"})
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    by_date = {s["date"]: s for s in pf["snapshots"]}
+    snap = by_date["2026-03-01"]
+    assert snap["status"] == "COMPLETE" and snap["total"] == "10000.00"
+    # Com o BCB fora, a posição *atual* (meses depois) segue sem cotação: honesto.
+    assert pf["unpriced"] == ["CDBD1"]
+
+
+async def test_snapshot_rebuild_para_frente(iac):
+    """Evento retroativo recalcula as linhas posteriores: nada de zero obsoleto no gráfico."""
+    from datetime import date
+
+    ac, h = iac, await _user(iac, "fwd")
+    cc = await _mk_account(ac, h, "Corrente", "CHECKING", "5000.00")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT")
+    r = await ac.post(
+        "/api/transfers", json={"from_account_id": cc, "to_account_id": br, "amount": "2000.00"}, headers=h
+    )
+    assert r.status_code == 201, r.text
+    today = date.today().isoformat()
+    by_date = {s["date"]: s for s in (await ac.get("/api/portfolio", headers=h)).json()["snapshots"]}
+    assert by_date[today]["cash"] == "2000.00"
+
+    aid = (await _mk_asset(ac, h, "FWD1", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-05", "quantity": "15", "price": "100.00"})
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-01-05", "price": "100.00"}, headers=h)
+
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    by_date = {s["date"]: s for s in pf["snapshots"]}
+    assert "2026-01-05" in by_date  # linha do evento retroativo existe
+    assert by_date[today]["cash"] == "500.00"  # 2000 − 1500: linha posterior recalculada
+    assert by_date[today]["status"] == "COMPLETE" and by_date[today]["total"] == "2000.00"
+
+
+async def test_conta_nova_ou_removida_reconstroi_serie(iac):
+    """Criar/remover conta muda o caixa de todas as datas: série inteira recalculada."""
+    from datetime import date
+
+    ac, h = iac, await _user(iac, "initcash")
+    await _mk_account(ac, h, "Corretora", "INVESTMENT", "1000.00")
+    today = date.today().isoformat()
+    by_date = {s["date"]: s for s in (await ac.get("/api/portfolio", headers=h)).json()["snapshots"]}
+    assert by_date[today]["cash"] == "1000.00"
+
+    extra = await _mk_account(ac, h, "Extra", "INVESTMENT", "500.00")
+    by_date = {s["date"]: s for s in (await ac.get("/api/portfolio", headers=h)).json()["snapshots"]}
+    assert by_date[today]["cash"] == "1500.00"
+
+    assert (await ac.delete(f"/api/accounts/{extra}", headers=h)).status_code == 204
+    by_date = {s["date"]: s for s in (await ac.get("/api/portfolio", headers=h)).json()["snapshots"]}
+    assert by_date[today]["cash"] == "1000.00"
+
+
+async def test_portfolio_rebuild_endpoint(iac):
+    """POST /api/portfolio/rebuild repara linhas obsoletas sem novos eventos."""
+    ac, h = iac, await _user(iac, "reb")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "1000.00")
+    aid = (await _mk_asset(ac, h, "REB1", br, asset_class="FUNDOS", subtype="FII")).json()["id"]
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-02-01", "quantity": "10", "price": "100.00"})
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-02-01", "price": "100.00"}, headers=h)
+    r = await ac.post("/api/portfolio/rebuild", headers=h)
+    assert r.status_code == 200, r.text
+    assert "2026-02-01" in r.json()["rebuilt"]
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    assert pf["status"] == "COMPLETE" and pf["total"] == "1000.00"

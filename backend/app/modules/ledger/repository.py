@@ -43,10 +43,10 @@ async def create_transfer(
     )
     session.add(row)
     await session.flush()
-    # O caixa da corretora mudou: atualiza a série da carteira na data do evento.
+    # O caixa da corretora mudou: reconstrói a série desde a data do evento (para frente).
     from app.modules.investments import portfolio as pf
 
-    await pf.upsert_snapshot(session, user_id, on)
+    await pf.rebuild_snapshots(session, user_id, since=on)
     await session.commit()
     await session.refresh(row)
     return row
@@ -76,7 +76,7 @@ async def delete_movement(session: AsyncSession, row: LedgerMovement) -> None:
     await session.flush()
     from app.modules.investments import portfolio as pf
 
-    await pf.upsert_snapshot(session, user_id, on)
+    await pf.rebuild_snapshots(session, user_id, since=on)
     await session.commit()
 
 

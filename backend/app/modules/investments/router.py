@@ -95,6 +95,14 @@ async def get_portfolio(session: AsyncSession = Depends(get_session), user=Depen
     return PortfolioOut(**await pf.compute_portfolio(session, user.id))
 
 
+@portfolio_router.post("/rebuild")
+async def rebuild_portfolio(session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
+    """Recalcula toda a série de snapshots (dados derivados; repara linhas obsoletas)."""
+    dates = await pf.rebuild_snapshots(session, user.id)
+    await session.commit()
+    return {"rebuilt": [d.isoformat() for d in dates]}
+
+
 @router.get("/{asset_id}", response_model=AssetOut)
 async def get_asset(asset_id: int, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
     row = await repo.get_asset(session, user.id, asset_id)

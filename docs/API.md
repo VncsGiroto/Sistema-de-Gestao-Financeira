@@ -45,6 +45,7 @@ POST /api/assets/{id}/ops {APORTE|RESGATE (exigem conta vinculada; movem caixa a
 RF com contrato (CDI_PCT/PREFIXADO): ops em valor — `amount` obrigatório, `quantity`/`price` rejeitados; conversão pela cotação do contrato na data (1,0 sem posição); `full:true` no RESGATE liquida tudo (incompatível com `amount`); resgate parcial acima da posição → 422 (nunca liquida silenciosamente); data futura → 422; caixa insuficiente → 422
 POST /api/assets/{id}/prices {date, price, override?} → manual bloqueado com contrato (só `override:true` → `MANUAL_OVERRIDE`)
 GET /api/portfolio → {cash, positions_value|null, total|null, patrimonio|null, status (COMPLETE|INCOMPLETE), aportes, reinvestimentos, resgates, rendimentos, net_invested, resultado|null, xirr|null, twr|null, positions[], unpriced[], by_class[], by_account[], snapshots[{date,cash,positions_value|null,total|null,status,unpriced[]}], history_since} (sem cotação em posição ativa → parcial com null, nunca zero; histórico antigo = UNKNOWN)
+POST /api/portfolio/rebuild → {rebuilt: [dates]} (recalcula a série desde o evento mais antigo: eventos retroativos atualizam as linhas posteriores + hoje)
 ```
 GET /api/transactions/export?format=csv&... (mesmos filtros)
 ```

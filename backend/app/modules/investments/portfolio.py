@@ -212,7 +212,30 @@ async def upsert_snapshot(session: AsyncSession, user_id: int, on: date | None =
     await session.flush()
 
 
+async def rebuild_snapshots(
+    session: AsyncSession, user_id: int, since: date | None = None, today: date | None = None
+) -> list[date]:
+    """Recalcula a série a partir de `since` (flush, sem commit: o chamador commita).
+
+    Um evento retroativo muda todos os pontos posteriores: sem reconstruir para frente,
+    linhas antigas (ex.: zeros de antes do aporte existir) permanecem e o gráfico mente.
+    Sempre inclui a linha de hoje para a série terminar no estado atual.
+    """
+    today = today or date.today()
+    q = select(PortfolioSnapshot.date).where(PortfolioSnapshot.user_id == user_id)
+    if since is not None:
+        q = q.where(PortfolioSnapshot.date >= since)
+    rows = (await session.execute(q.order_by(PortfolioSnapshot.date))).all()
+    # A linha do evento pode ainda não existir: inclui `since` explicitamente,
+    # senão só a linha de hoje seria (re)escrita e o ponto histórico sumiria.
+    seed = {since} if since is not None else set()
+    targets = sorted({r[0] for r in rows} | {today} | seed)
+    for d in targets:
+        await upsert_snapshot(session, user_id, d)
+    return targets
+
+
 async def record_snapshot(session: AsyncSession, user_id: int, on: date | None = None) -> None:
-    """Upsert do snapshot do dia (último estado vence). Chamado sob evento."""
-    await upsert_snapshot(session, user_id, on)
+    """Reconstrói a série desde `on` (None = tudo) e commita. Chamado sob evento."""
+    await rebuild_snapshots(session, user_id, since=on)
     await session.commit()

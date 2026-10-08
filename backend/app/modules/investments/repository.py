@@ -277,7 +277,7 @@ async def add_op(
         session.add(tx)
         await session.flush()
         row.transaction_id = tx.id
-    await pf.upsert_snapshot(session, user_id, on)
+    await pf.rebuild_snapshots(session, user_id, since=on)
     await session.commit()
     await session.refresh(row)
     return row
@@ -294,6 +294,7 @@ async def delete_op(session: AsyncSession, user_id: int, asset_id: int, op_id: i
     row = res.scalar_one_or_none()
     if row is None:
         return False
+    op_date = row.date
     if row.transaction_id is not None:
         tx = await session.get(Transaction, row.transaction_id)
         if tx is not None and tx.user_id == user_id:
@@ -302,7 +303,7 @@ async def delete_op(session: AsyncSession, user_id: int, asset_id: int, op_id: i
     await session.flush()
     from app.modules.investments import portfolio as pf
 
-    await pf.upsert_snapshot(session, user_id)
+    await pf.rebuild_snapshots(session, user_id, since=op_date)
     await session.commit()
     return True
 
@@ -343,7 +344,7 @@ async def set_manual_price(
     else:
         row.price = price
     await session.flush()
-    await pf.upsert_snapshot(session, user_id, on)
+    await pf.rebuild_snapshots(session, user_id, since=on)
     await session.commit()
     await session.refresh(row)
     return {"id": row.id, "date": row.date, "price": row.price, "source": row.source}

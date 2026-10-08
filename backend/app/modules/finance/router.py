@@ -61,6 +61,11 @@ async def list_accounts(session: AsyncSession = Depends(get_session), user=Depen
 @accounts.post("", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
 async def create_account(body: AccountIn, session: AsyncSession = Depends(get_session), user=Depends(get_current_user)):
     row = await repo.create_account(session, user.id, **body.model_dump())
+    # O saldo inicial entra no caixa de todas as datas: reconstrói a série inteira.
+    from app.modules.investments import portfolio as pf
+
+    await pf.rebuild_snapshots(session, user.id)
+    await session.commit()
     sums = await repo.account_summaries(session, user.id, date_t.today())
     return _account_out(row, sums.get(row.id))
 
@@ -90,6 +95,11 @@ async def patch_account(
         setattr(row, k, v)
     await session.commit()
     await session.refresh(row)
+    # Saldo inicial/tipo mudam o caixa histórico: reconstrói a série inteira.
+    from app.modules.investments import portfolio as pf
+
+    await pf.rebuild_snapshots(session, user.id)
+    await session.commit()
     sums = await repo.account_summaries(session, user.id, date_t.today())
     return _account_out(row, sums.get(row.id))
 
@@ -104,6 +114,10 @@ async def delete_account(account_id: int, session: AsyncSession = Depends(get_se
     except IntegrityError:
         await session.rollback()
         raise http_error(status.HTTP_409_CONFLICT, "Conflict", "Conta possui movimentações e não pode ser excluída")
+    from app.modules.investments import portfolio as pf
+
+    await pf.rebuild_snapshots(session, user.id)
+    await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -219,7 +233,7 @@ async def create_tx(body: TxIn, session: AsyncSession = Depends(get_session), us
         raise unprocessable(str(e))
     from app.modules.investments import portfolio as pf
 
-    await pf.record_snapshot(session, user.id)
+    await pf.record_snapshot(session, user.id, row.date)
     return _tx_out(row)
 
 
@@ -252,6 +266,7 @@ async def patch_tx(
     if await repo.is_investment_linked(session, user.id, tx_id):
         raise unprocessable("Transação gerada por operação de investimento; edite ou exclua pela operação")
     data = body.model_dump(exclude_unset=True)
+    old_date = row.date
     if "account_id" in data and await repo.get_account(session, user.id, data["account_id"]) is None:
         raise not_found()
     # valida o estado final (tipo/categoria após o patch, não só o que foi enviado)
@@ -269,7 +284,8 @@ async def patch_tx(
     await session.refresh(row)
     from app.modules.investments import portfolio as pf
 
-    await pf.record_snapshot(session, user.id)
+    new_date = data.get("date") or old_date
+    await pf.record_snapshot(session, user.id, min(old_date, new_date))
     return _tx_out(row)
 
 
@@ -280,10 +296,11 @@ async def delete_tx(tx_id: int, session: AsyncSession = Depends(get_session), us
         raise not_found()
     if await repo.is_investment_linked(session, user.id, tx_id):
         raise unprocessable("Transação gerada por operação de investimento; edite ou exclua pela operação")
+    tx_date = row.date
     await repo.delete_tx(session, row)
     from app.modules.investments import portfolio as pf
 
-    await pf.record_snapshot(session, user.id)
+    await pf.record_snapshot(session, user.id, tx_date)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import type { Asset, AssetBody, Op, OpBody, Portfolio } from "../../lib/api";
+import type { Asset, AssetBody, Op, OpBody, Portfolio, Position, Returns } from "../../lib/api";
 import { useAuth } from "../../lib/auth-store";
 
 const STALE = 30_000;
@@ -35,12 +35,41 @@ export function usePortfolio() {
   });
 }
 
-export function useOps(assetId: number | null) {  const { access, refresh } = useAuth();
+export function useOps(assetId: number | null) {
+  const { access, refresh } = useAuth();
   return useQuery({
     queryKey: ["asset-ops", assetId],
     queryFn: async () => {
       if (!access || !assetId) throw new Error("Sem sessão");
       const { data } = await api.authFetch<Op[]>(`/assets/${assetId}/ops`, access, refresh);
+      return data;
+    },
+    staleTime: STALE,
+    enabled: !!access && !!assetId,
+  });
+}
+
+export function usePosition(assetId: number | null) {
+  const { access, refresh } = useAuth();
+  return useQuery({
+    queryKey: ["position", assetId],
+    queryFn: async () => {
+      if (!access || !assetId) throw new Error("Sem sessão");
+      const { data } = await api.authFetch<Position>(`/assets/${assetId}/position`, access, refresh);
+      return data;
+    },
+    staleTime: STALE,
+    enabled: !!access && !!assetId,
+  });
+}
+
+export function useReturns(assetId: number | null) {
+  const { access, refresh } = useAuth();
+  return useQuery({
+    queryKey: ["returns", assetId],
+    queryFn: async () => {
+      if (!access || !assetId) throw new Error("Sem sessão");
+      const { data } = await api.authFetch<Returns>(`/assets/${assetId}/returns`, access, refresh);
       return data;
     },
     staleTime: STALE,
@@ -68,6 +97,10 @@ export function useAssetMutations() {
   };
   return {
     create: useMutation({ mutationFn: (b: AssetBody) => run((t) => api.assets.create(b, t)), onSuccess: inv }),
+    patch: useMutation({
+      mutationFn: (v: { id: number; body: Partial<AssetBody> }) => run((t) => api.assets.patch(v.id, v.body, t)),
+      onSuccess: inv,
+    }),
     remove: useMutation({ mutationFn: (id: number) => run((t) => api.assets.remove(id, t)), onSuccess: inv }),
     addOp: useMutation({
       mutationFn: (v: { id: number; body: OpBody }) => run((t) => api.assets.addOp(v.id, v.body, t)),

@@ -40,6 +40,7 @@ def _asset_out(r) -> AssetOut:
         rate_type=r.rate_type,
         rate=r.rate,
         maturity_date=r.maturity_date,
+        tax_rate=r.tax_rate,
     )
 
 
@@ -82,6 +83,7 @@ async def create_asset(body: AssetIn, session: AsyncSession = Depends(get_sessio
             body.rate_type,
             body.rate,
             body.maturity_date,
+            body.tax_rate,
         )
     except LookupError:
         raise not_found()
@@ -218,6 +220,7 @@ async def get_position(asset_id: int, session: AsyncSession = Depends(get_sessio
     from datetime import date
     from decimal import Decimal
 
+    from app.modules.investments.taxation import estimate_net
     from app.modules.market.prices import resolve_price
 
     row = await repo.get_asset(session, user.id, asset_id)
@@ -252,6 +255,21 @@ async def get_position(asset_id: int, session: AsyncSession = Depends(get_sessio
                 "current_value": value,
                 "pnl": pnl,
                 "profitability": (pnl / external).quantize(Decimal("0.0001")) if external > 0 else None,
+            }
+            ops = await repo.list_ops(session, user.id, asset_id)
+            first = next((o.date for o in ops if o.kind == "APORTE"), None)
+            est = estimate_net(
+                current_value=value,
+                invested=pos["invested"],
+                days_held=(date.today() - first).days if first is not None else None,
+                asset_class=row.asset_class,
+                tax_rate=row.tax_rate,
+            )
+            out |= {
+                "net_value": est["net"],
+                "net_tax": est["tax"],
+                "net_rate": est["rate"],
+                "net_rate_source": est["rate_source"],
             }
     return PositionOut(**out)
 

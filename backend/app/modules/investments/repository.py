@@ -58,6 +58,7 @@ async def create_asset(
     rate_type: str | None = None,
     rate=None,
     maturity_date=None,
+    tax_rate=None,
 ) -> Asset:
     if category_id is not None and await _owned_category(session, user_id, category_id) is None:
         raise LookupError("category")
@@ -75,6 +76,7 @@ async def create_asset(
         rate_type=rate_type,
         rate=rate,
         maturity_date=maturity_date,
+        tax_rate=tax_rate,
     )
     session.add(row)
     try:

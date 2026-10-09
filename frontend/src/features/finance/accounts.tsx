@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAccountMutations, useAccounts } from "./hooks";
 import { ApiError } from "../../lib/api";
+import { todayISO } from "../../lib/date";
 import { Button, Field, PageHeader, useConfirm } from "../../components/ui";
 import { accountTypeLabel, labelOf } from "../../lib/labels";
 
@@ -21,21 +22,24 @@ export function AccountsPage() {
   const [transferId, setTransferId] = useState<number | null>(null);
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
+  const [transferDate, setTransferDate] = useState(todayISO);
 
   async function onTransfer(fromId: number, fromName: string) {
     setMsg("");
     if (!transferTo) return setMsg("Selecione a conta de destino.");
     if (!transferAmount.trim()) return setMsg("Informe o valor.");
+    if (!transferDate) return setMsg("Informe a data.");
     const toName = (data ?? []).find((a) => String(a.id) === transferTo)?.name ?? "conta";
+    const dateBR = transferDate.split("-").reverse().join("/");
     const ok = await confirm.ask({
       title: "Confirmar transferência?",
-      body: `R$ ${transferAmount.trim()} de “${fromName}” para “${toName}”. Não entra em receitas nem despesas.`,
+      body: `R$ ${transferAmount.trim()} de “${fromName}” para “${toName}” em ${dateBR}. Não entra em receitas nem despesas.`,
       confirmLabel: "Transferir",
     });
     if (!ok) return;
     try {
-      await m.transfer.mutateAsync({ from_account_id: fromId, to_account_id: Number(transferTo), amount: transferAmount.trim() });
-      setTransferId(null); setTransferTo(""); setTransferAmount("");
+      await m.transfer.mutateAsync({ from_account_id: fromId, to_account_id: Number(transferTo), amount: transferAmount.trim(), date: transferDate });
+      setTransferId(null); setTransferTo(""); setTransferAmount(""); setTransferDate(todayISO());
     } catch (e) {
       setMsg(e instanceof ApiError ? e.message : "Falha ao transferir.");
     }
@@ -131,7 +135,7 @@ export function AccountsPage() {
                   </span>
                   {" "}<Link to="/app/transactions" search={{ account_id: a.id }}>ver movimentações</Link>
                 </span>
-                <Button size="sm" variant="ghost" onClick={() => { setTransferId(transferId === a.id ? null : a.id); setTransferTo(""); setTransferAmount(""); }}>Transferir</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setTransferId(transferId === a.id ? null : a.id); setTransferTo(""); setTransferAmount(""); setTransferDate(todayISO()); }}>Transferir</Button>
                 <Button size="sm" variant="ghost" onClick={() => { setEditing(a.id); setEditName(a.name); }}>Renomear</Button>
                 <Button size="sm" variant="danger" onClick={() => onDelete(a.id, a.name)}>Excluir</Button>
                 {transferId === a.id && (
@@ -144,6 +148,9 @@ export function AccountsPage() {
                     </Field>
                     <Field label="Valor (R$)">
                       <input className="fw-input" style={{ width: "auto" }} placeholder="0,00" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} />
+                    </Field>
+                    <Field label="Data">
+                      <input className="fw-input" style={{ width: "auto" }} type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} />
                     </Field>
                     <Button size="sm" type="submit">Enviar</Button>
                   </form>

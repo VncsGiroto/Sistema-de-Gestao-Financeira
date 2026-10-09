@@ -785,3 +785,90 @@ async def test_portfolio_rebuild_endpoint(iac):
     assert "2026-02-01" in r.json()["rebuilt"]
     pf = (await ac.get("/api/portfolio", headers=h)).json()
     assert pf["status"] == "COMPLETE" and pf["total"] == "1000.00"
+
+
+async def test_resgate_com_ir_retido(iac):
+    """0018: RESGATE com fees (IR retido): caixa recebe o líquido; posição mostra líquido est. auto."""
+    ac, h = iac, await _user(iac, "irf")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "1000.00")
+    aid = (await _mk_asset(ac, h, "IRF1", br)).json()["id"]
+
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100.00"})
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-02-01", "price": "110.00"}, headers=h)
+
+    p = (await ac.get(f"/api/assets/{aid}/position", headers=h)).json()
+    assert p["current_value"] == "1100.00" and p["invested"] == "1000.00"
+    assert p["net_rate"] == "15" and p["net_rate_source"] == "auto"
+    assert p["net_tax"] == "15.00" and p["net_value"] == "1085.00"
+
+    # bruto 4×120=480 − IR 30 → líquido 450 no caixa, com data passada
+    op = await _op(
+        ac, h, aid, {"kind": "RESGATE", "date": "2026-03-01", "quantity": "4", "price": "120.00", "fees": "30.00"}
+    )
+    assert op["amount"] == "450.00" and op["fees"] == "30.00"
+    assert (await ac.get(f"/api/accounts/{br}", headers=h)).json()["current_balance"] == "450.00"
+    p = (await ac.get(f"/api/assets/{aid}/position", headers=h)).json()
+    assert p["resgates"] == "450.00" and Decimal(p["quantity"]) == 6
+
+
+async def test_tax_rate_manual(iac):
+    """0018: PATCH tax_rate sobrescreve a auto; fora de 0–100 rejeita."""
+    ac, h = iac, await _user(iac, "txm")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "1000.00")
+    body = {"ticker": "TXM1", "asset_class": "RENDA_VARIAVEL", "subtype": "ACAO", "account_id": br, "tax_rate": "10"}
+    aid = (await ac.post("/api/assets", json=body, headers=h)).json()["id"]
+    assert (await ac.get(f"/api/assets/{aid}", headers=h)).json()["tax_rate"] == "10.00"
+
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100.00"})
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-02-01", "price": "110.00"}, headers=h)
+    p = (await ac.get(f"/api/assets/{aid}/position", headers=h)).json()
+    assert p["net_rate"] == "10.00" and p["net_rate_source"] == "manual"
+    assert p["net_tax"] == "10.00" and p["net_value"] == "1090.00"
+
+    r = await ac.patch(f"/api/assets/{aid}", json={"tax_rate": "101"}, headers=h)
+    assert r.status_code == 422, r.text
+    r = await ac.patch(f"/api/assets/{aid}", json={"tax_rate": "-1"}, headers=h)
+    assert r.status_code == 422, r.text
+
+
+async def test_rf_resgate_total_com_ir_e_data_passada(iac, monkeypatch):
+    """0018: full + fees + data passada: líquido no caixa, posição zerada."""
+    from app.modules.market import bcb
+
+    async def fake_cdi(start, end, timeout_s=15, client=None):
+        out, cur = {}, start
+        while cur <= end:
+            if cur.weekday() < 5:
+                out[cur] = Decimal("0.05")
+            cur += timedelta(days=1)
+        return out
+
+    monkeypatch.setattr(bcb, "cdi_range", fake_cdi)
+
+    ac, h = iac, await _user(iac, "rff")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "5000.00")
+    asset = await _mk_asset(ac, h, "CDBF", br, asset_class="RENDA_FIXA", subtype="CDB", rate_type="CDI_PCT", rate="100")
+    aid = asset.json()["id"]
+
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-09-25", "amount": "1000.00"})
+    op = await _op(ac, h, aid, {"kind": "RESGATE", "date": "2026-09-27", "fees": "50.00", "full": True})
+    assert op["fees"] == "50.00" and Decimal(op["amount"]) > 0
+    bal = (await ac.get(f"/api/accounts/{br}", headers=h)).json()["current_balance"]
+    assert Decimal(bal) == Decimal("4000.00") + Decimal(op["amount"])
+    p = (await ac.get(f"/api/assets/{aid}/position", headers=h)).json()
+    assert Decimal(p["quantity"]) == 0 and p["invested"] == "0.00"
+
+
+async def test_snapshot_gain_sem_aporte(iac):
+    """0018b: snapshots carregam gain (total − aportes líquidos); INCOMPLETE segue null."""
+    ac, h = iac, await _user(iac, "gain")
+    br = await _mk_account(ac, h, "Corretora", "INVESTMENT", "1000.00")
+    aid = (await _mk_asset(ac, h, "GAIN1", br)).json()["id"]
+    await _op(ac, h, aid, {"kind": "APORTE", "date": "2026-01-10", "quantity": "10", "price": "100.00"})
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-02-01", "price": "110.00"}, headers=h)
+    await ac.post(f"/api/assets/{aid}/prices", json={"date": "2026-03-01", "price": "120.00"}, headers=h)
+    pf = (await ac.get("/api/portfolio", headers=h)).json()
+    by_date = {s["date"]: s for s in pf["snapshots"]}
+    assert by_date["2026-01-10"]["gain"] is None  # sem preço na data: INCOMPLETE
+    assert by_date["2026-02-01"]["gain"] == "0.00"  # 1º ponto COMPLETE zera
+    assert by_date["2026-03-01"]["gain"] == "100.00"  # 1200 − 1100, sem fluxos

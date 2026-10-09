@@ -17,6 +17,22 @@ from app.modules.market import bcb
 from app.modules.market.prices import resolve_price
 
 
+def cumulative_gains(totals: list[tuple[date, Decimal]], flows: list[tuple[date, Decimal]]) -> dict:
+    """Ganho acumulado por data: total − total inicial − aportes líquidos após o início.
+
+    Puro e unit testável. O aporte em si nunca soma no ganho; o rendimento dele
+    soma (entra no total sem entrar nos fluxos). Primeiro ponto sempre zera.
+    """
+    out: dict = {}
+    if not totals:
+        return out
+    base_date, base_total = totals[0]
+    for d, t in totals:
+        net = sum((a for fd, a in flows if base_date < fd <= d), Decimal("0"))
+        out[d] = (Decimal(t) - Decimal(base_total) - net).quantize(Decimal("0.01"))
+    return out
+
+
 async def compute_portfolio(
     session: AsyncSession, user_id: int, ref: date | None = None, persist_prices: bool = False
 ) -> dict:
@@ -146,6 +162,13 @@ async def compute_portfolio(
     )
     snap_rows = list(snaps.scalars().all())
     complete = [s for s in snap_rows if s.status == "COMPLETE"]
+    # Ganho acumulado por ponto: total − total do 1º ponto COMPLETE − aportes
+    # líquidos após ele (aporte em si nunca soma; o rendimento dele soma).
+    gain_totals: list[tuple[date, Decimal]] = []
+    for s in complete:
+        assert s.total is not None  # COMPLETE implica total presente (upsert grava juntos)
+        gain_totals.append((s.date, s.total))
+    gain_by_date = cumulative_gains(gain_totals, ext)
     twr = None
     if len(complete) >= 2:
         # COMPLETE implica total presente (upsert grava os dois juntos).
@@ -164,6 +187,7 @@ async def compute_portfolio(
             "total": s.total,
             "status": s.status,
             "unpriced": list(s.unpriced or []),
+            "gain": gain_by_date.get(s.date),
         }
         for s in snap_rows
     ]

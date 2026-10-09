@@ -44,7 +44,7 @@ export function useAccountMutations() {
     patch: useMutation({ mutationFn: (v: { id: number; body: { name?: string; bank?: string } }) => run((t) => api.accounts.patch(v.id, v.body, t)), onSuccess: inv }),
     remove: useMutation({ mutationFn: (id: number) => run((t) => api.accounts.remove(id, t)), onSuccess: inv }),
     transfer: useMutation({
-      mutationFn: (b: { from_account_id: number; to_account_id: number; amount: string }) => run((t) => api.transfers.create(b, t)),
+      mutationFn: (b: { from_account_id: number; to_account_id: number; amount: string; date?: string }) => run((t) => api.transfers.create(b, t)),
       onSuccess: inv,
     }),
     removeTransfer: useMutation({

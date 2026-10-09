@@ -13,6 +13,7 @@ export interface Asset {
   rate_type: string | null;
   rate: string | null;
   maturity_date: string | null;
+  tax_rate: string | null;
 }
 
 export interface AssetBody {
@@ -26,6 +27,7 @@ export interface AssetBody {
   rate_type?: string;
   rate?: string;
   maturity_date?: string;
+  tax_rate?: string;
 }
 
 export interface Op {
@@ -67,6 +69,10 @@ export interface Position {
   current_value: string | null;
   pnl: string | null;
   profitability: string | null;
+  net_value: string | null;
+  net_tax: string | null;
+  net_rate: string | null;
+  net_rate_source: string | null;
 }
 
 export interface PortfolioPosition {
@@ -89,6 +95,7 @@ export interface PortfolioSnapshot {
   total: string | null;
   status: string;
   unpriced: string[];
+  gain?: string | null;
 }
 
 export interface Portfolio {

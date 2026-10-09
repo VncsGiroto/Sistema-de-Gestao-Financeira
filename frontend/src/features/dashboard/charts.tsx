@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as echarts from "echarts";
 import type { DashboardData, PortfolioSnapshot } from "../../lib/api";
+import { Button } from "../../components/ui";
 
 const FONT = "Inter, system-ui, sans-serif";
 const GREEN = "#059669";
@@ -120,7 +121,7 @@ export function formatSnapshotTip(
   total: number | null,
 ): string {
   const money = (v: number | null) => (v == null ? "—" : moneyFmt(v));
-  let html = `${s.date}<br/>Caixa: ${moneyFmt(Number(s.cash))}<br/>Posições: ${money(positions)}<br/>Total: ${money(total)}`;
+  let html = `${s.date}<br/>Caixa: ${moneyFmt(Number(s.cash))}<br/>Carteira: ${money(positions)}<br/>Total: ${money(total)}`;
   if (s.status !== "COMPLETE") {
     const why = s.status === "UNKNOWN"
       ? "histórico sem avaliação registrada"
@@ -130,43 +131,151 @@ export function formatSnapshotTip(
   return html;
 }
 
+const dayMs = (d: string) => new Date(`${d}T00:00:00`).getTime();
+
+/** Ponto exibível. */
+export interface ChartPoint {
+  date: string;
+  cash: number | null;
+  positions: number | null;
+  total: number | null;
+  gain: number | null;
+  snap: PortfolioSnapshot;
+}
+
+/** Snapshots → pontos (1:1, na ordem). Lacunas reais de cotação continuam
+ *  como null nas séries (nunca zero, nunca conectadas). Puro e testável. */
+export function toChartPoints(snapshots: PortfolioSnapshot[]): ChartPoint[] {
+  const priced = (v: string | null) => (v == null ? null : Number(v));
+  const complete = (s: PortfolioSnapshot) => s.status === "COMPLETE";
+  return snapshots.map((s) => ({
+    date: s.date,
+    cash: Number(s.cash),
+    positions: complete(s) ? priced(s.positions_value) : null,
+    total: complete(s) ? priced(s.total) : null,
+    gain: priced(s.gain ?? null),
+    snap: s,
+  }));
+}
+
+/** Indexa a série em base 100 no primeiro valor não-nulo (modo % do gráfico).
+ *  Nulos preservados; base ausente/zero → tudo null (sem inventar número). */
+export function indexBase100(values: (number | null)[]): (number | null)[] {
+  const base = values.find((v) => v != null);
+  if (base == null || base === 0) return values.map(() => null);
+  return values.map((v) => (v == null ? null : (v / base) * 100));
+}
+
+/** Tooltip do modo %: percentual com o R$ ancorado; quebra de segmento vazia. */
+export function formatIndexedTip(p: ChartPoint, positionsPct: number | null, totalPct: number | null): string {
+  if (p.snap == null) return "";
+  const pct = (v: number | null, money: number | null) =>
+    v == null ? "—" : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% (${moneyFmt(money ?? 0)})`;
+  return `${p.date}<br/>Carteira: ${pct(positionsPct, p.positions)}<br/>Total: ${pct(totalPct, p.total)}`;
+}
+
+/** Anexa o ponto "hoje" (não persistido) com os totais ao vivo do portfolio,
+ *  para a série terminar no dia atual. Puro e testável. */
+export function withToday(
+  snapshots: PortfolioSnapshot[],
+  live: { cash: string; positions_value: string | null; total: string | null; status: string; unpriced: string[] },
+  today: string,
+): PortfolioSnapshot[] {
+  if (snapshots.length === 0) return snapshots;
+  const last = snapshots[snapshots.length - 1].date;
+  if (last >= today || snapshots.some((s) => s.date === today)) return snapshots;
+  return [
+    ...snapshots,
+    {
+      date: today,
+      cash: live.cash,
+      positions_value: live.positions_value,
+      total: live.total,
+      status: live.status,
+      unpriced: live.unpriced,
+    },
+  ];
+}
+
 /** Linha de evolução; null abre lacuna (nunca zero): pontos sem cotação completa
  *  não conectam as linhas de posições/total. Sem 2+ pontos, mensagem honesta. */
 export function SnapshotsLine({ snapshots }: { snapshots: PortfolioSnapshot[] }) {
+  const [mode, setMode] = useState<"brl" | "pct" | "gain">("brl");
+  const points = toChartPoints(snapshots);
   const series = toChartSeries(snapshots);
+  const positionsPct = indexBase100(points.map((p) => p.positions));
+  const totalPct = indexBase100(points.map((p) => p.total));
+  const isPct = mode === "pct";
+  const isGain = mode === "gain";
+  const spanDays = snapshots.length >= 2
+    ? Math.round((dayMs(snapshots[snapshots.length - 1].date) - dayMs(snapshots[0].date)) / 86_400_000)
+    : 0;
+  const pctFmt = (v: number) => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+  const gainTip = (params: unknown) => {
+    const rows = Array.isArray(params) ? params : [params];
+    const idx = (rows[0] as { dataIndex?: number })?.dataIndex ?? 0;
+    const p = points[idx];
+    return `${p.date}<br/>Ganhos acumulados: ${p.gain == null ? "—" : moneyFmt(p.gain)}`;
+  };
   const ref = useChart(
     snapshots.length >= 2
       ? {
         textStyle: { fontFamily: FONT },
         tooltip: {
           trigger: "axis",
-          formatter: (params: unknown) => {
-            const rows = Array.isArray(params) ? params : [params];
-            const idx = (rows[0] as { dataIndex?: number })?.dataIndex ?? 0;
-            return formatSnapshotTip(snapshots[idx], series.positions[idx] ?? null, series.total[idx] ?? null);
-          },
+          formatter: isGain
+            ? gainTip
+            : isPct
+              ? (params: unknown) => {
+                const rows = Array.isArray(params) ? params : [params];
+                const idx = (rows[0] as { dataIndex?: number })?.dataIndex ?? 0;
+                return formatIndexedTip(points[idx], positionsPct[idx] ?? null, totalPct[idx] ?? null);
+              }
+              : (params: unknown) => {
+                const rows = Array.isArray(params) ? params : [params];
+                const idx = (rows[0] as { dataIndex?: number })?.dataIndex ?? 0;
+                const p = points[idx];
+                return formatSnapshotTip(p.snap, p.positions, p.total);
+              },
         },
-        legend: { data: ["Caixa", "Posições", "Total"], textStyle: { color: SLATE }, bottom: 0 },
+        legend: {
+          data: isGain ? ["Ganhos"] : isPct ? ["Carteira", "Total"] : ["Caixa", "Carteira", "Total"],
+          textStyle: { color: SLATE },
+          bottom: 0,
+        },
         grid: { left: 8, right: 8, top: 24, bottom: 52, containLabel: true },
-        xAxis: { type: "category", data: snapshots.map((s) => s.date), axisLine: { lineStyle: { color: "#e2e8f0" } }, axisLabel: { color: SLATE } },
-        yAxis: { type: "value", splitLine: { lineStyle: { color: "#eef2f0" } }, axisLabel: { color: SLATE } },
-        series: [
-          { name: "Caixa", type: "line", data: series.cash, itemStyle: { color: SLATE } },
-          {
-            name: "Posições",
-            type: "line",
-            connectNulls: false,
-            data: series.positions,
-            itemStyle: { color: "#2563eb" },
-          },
-          {
-            name: "Total",
-            type: "line",
-            connectNulls: false,
-            data: series.total,
-            itemStyle: { color: GREEN },
-          },
-        ],
+        xAxis: { type: "category", data: points.map((p) => p.date), axisLine: { lineStyle: { color: "#e2e8f0" } }, axisLabel: { color: SLATE } },
+        yAxis: {
+          type: "value",
+          splitLine: { lineStyle: { color: "#eef2f0" } },
+          axisLabel: isPct ? { color: SLATE, formatter: pctFmt } : { color: SLATE },
+        },
+        series: isGain
+          ? [
+            { name: "Ganhos", type: "line", connectNulls: false, data: points.map((p) => p.gain), itemStyle: { color: "#7c3aed" } },
+          ]
+          : isPct
+            ? [
+              { name: "Carteira", type: "line", connectNulls: false, data: positionsPct, itemStyle: { color: "#2563eb" } },
+              { name: "Total", type: "line", connectNulls: false, data: totalPct, itemStyle: { color: GREEN } },
+            ]
+            : [
+              { name: "Caixa", type: "line", data: points.map((p) => p.cash), itemStyle: { color: SLATE } },
+              {
+                name: "Carteira",
+                type: "line",
+                connectNulls: false,
+                data: points.map((p) => p.positions),
+                itemStyle: { color: "#2563eb" },
+              },
+              {
+                name: "Total",
+                type: "line",
+                connectNulls: false,
+                data: points.map((p) => p.total),
+                itemStyle: { color: GREEN },
+              },
+            ],
       }
       : null,
   );
@@ -175,7 +284,17 @@ export function SnapshotsLine({ snapshots }: { snapshots: PortfolioSnapshot[] })
   }
   return (
     <>
+      <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+        <Button size="sm" variant={mode !== "brl" ? "ghost" : undefined} onClick={() => setMode("brl")}>R$</Button>
+        <Button size="sm" variant={mode !== "pct" ? "ghost" : undefined} onClick={() => setMode("pct")}>%</Button>
+        <Button size="sm" variant={mode !== "gain" ? "ghost" : undefined} onClick={() => setMode("gain")}>Ganhos</Button>
+      </div>
       <div ref={ref} style={{ width: "100%", height: 300 }} />
+      <p><small>
+        {snapshots.length} pontos em {spanDays} dias — segmentos unem eventos.
+        {isPct && " Índice base 100 no primeiro ponto (Carteira e Total) — inclui aportes/resgates, não é rentabilidade pura."}
+        {isGain && " Ganhos acumulados (total − aportes líquidos): o aporte em si não soma, mas o rendimento dele soma."}
+      </small></p>
       {series.hasGaps && <p><small>Lacunas = dias sem cotação completa (posições/total indisponíveis, nunca zero).</small></p>}
     </>
   );

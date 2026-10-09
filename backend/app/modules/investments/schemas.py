@@ -17,6 +17,7 @@ class AssetIn(BaseModel):
     rate_type: str | None = Field(default=None, pattern="^(CDI_PCT|PREFIXADO|IPCA_MAIS)$")
     rate: Decimal | None = Field(default=None, gt=Decimal("0"))
     maturity_date: date_t | None = None
+    tax_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("100"))  # IR esperado %
 
 
 class AssetPatch(BaseModel):
@@ -27,6 +28,7 @@ class AssetPatch(BaseModel):
     rate_type: str | None = Field(default=None, pattern="^(CDI_PCT|PREFIXADO|IPCA_MAIS)$")
     rate: Decimal | None = Field(default=None, gt=Decimal("0"))
     maturity_date: date_t | None = None
+    tax_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("100"))
 
 
 class AssetOut(BaseModel):
@@ -42,6 +44,7 @@ class AssetOut(BaseModel):
     rate_type: str | None = None
     rate: Decimal | None = None
     maturity_date: date_t | None = None
+    tax_rate: Decimal | None = None
 
 
 class OpIn(BaseModel):
@@ -83,6 +86,10 @@ class PositionOut(BaseModel):
     current_value: Decimal | None = None
     pnl: Decimal | None = None
     profitability: Decimal | None = None  # simples; XIRR/TWR entram em 7.3
+    net_value: Decimal | None = None  # líquido est. do resgate total (IR estimado)
+    net_tax: Decimal | None = None  # IR estimado
+    net_rate: Decimal | None = None  # alíquota % aplicada
+    net_rate_source: str | None = None  # manual|auto
 
 
 class PriceIn(BaseModel):
@@ -146,6 +153,7 @@ class PortfolioSnapshotOut(BaseModel):
     total: Decimal | None = None
     status: str = "UNKNOWN"
     unpriced: list[str] = []
+    gain: Decimal | None = None  # ganho acumulado desde o 1º ponto COMPLETE (total − aportes líquidos)
 
 
 class PortfolioOut(BaseModel):

@@ -24,6 +24,7 @@ class Asset(Base):
         CheckConstraint(
             "asset_class IN ('RENDA_FIXA','RENDA_VARIAVEL','FUNDOS','CRIPTO','OUTROS')", name="ck_asset_class"
         ),
+        CheckConstraint("tax_rate IS NULL OR (tax_rate >= 0 AND tax_rate <= 100)", name="ck_asset_tax_rate"),
         UniqueConstraint("user_id", "ticker", "account_id", name="uq_assets_user_ticker_account"),
     )
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -38,6 +39,7 @@ class Asset(Base):
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     rate_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # CDI_PCT|PREFIXADO|IPCA_MAIS
     rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)  # % (pct do CDI ou a.a.)
+    tax_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)  # IR esperado % p/ líquido est.
     maturity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

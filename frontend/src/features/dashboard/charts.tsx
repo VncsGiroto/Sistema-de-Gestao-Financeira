@@ -140,6 +140,7 @@ export interface ChartPoint {
   positions: number | null;
   total: number | null;
   gain: number | null;
+  twr: number | null;
   snap: PortfolioSnapshot;
 }
 
@@ -154,6 +155,7 @@ export function toChartPoints(snapshots: PortfolioSnapshot[]): ChartPoint[] {
     positions: complete(s) ? priced(s.positions_value) : null,
     total: complete(s) ? priced(s.total) : null,
     gain: priced(s.gain ?? null),
+    twr: priced(s.twr ?? null),
     snap: s,
   }));
 }
@@ -166,6 +168,11 @@ export function indexBase100(values: (number | null)[]): (number | null)[] {
   return values.map((v) => (v == null ? null : (v / base) * 100));
 }
 
+/** Tooltip do modo TWR: % puro com o total ancorado. */
+export function formatTwrTip(p: ChartPoint): string {
+  if (p.twr == null) return `${p.date}<br/>TWR acumulado: —`;
+  return `${p.date}<br/>TWR acumulado: ${(p.twr * 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% (${moneyFmt(p.total ?? 0)})`;
+}
 /** Tooltip do modo %: percentual com o R$ ancorado; quebra de segmento vazia. */
 export function formatIndexedTip(p: ChartPoint, positionsPct: number | null, totalPct: number | null): string {
   if (p.snap == null) return "";
@@ -200,13 +207,14 @@ export function withToday(
 /** Linha de evolução; null abre lacuna (nunca zero): pontos sem cotação completa
  *  não conectam as linhas de posições/total. Sem 2+ pontos, mensagem honesta. */
 export function SnapshotsLine({ snapshots }: { snapshots: PortfolioSnapshot[] }) {
-  const [mode, setMode] = useState<"brl" | "pct" | "gain">("brl");
+  const [mode, setMode] = useState<"brl" | "pct" | "gain" | "twr">("brl");
   const points = toChartPoints(snapshots);
   const series = toChartSeries(snapshots);
   const positionsPct = indexBase100(points.map((p) => p.positions));
   const totalPct = indexBase100(points.map((p) => p.total));
   const isPct = mode === "pct";
   const isGain = mode === "gain";
+  const isTwr = mode === "twr";
   const spanDays = snapshots.length >= 2
     ? Math.round((dayMs(snapshots[snapshots.length - 1].date) - dayMs(snapshots[0].date)) / 86_400_000)
     : 0;
@@ -217,29 +225,25 @@ export function SnapshotsLine({ snapshots }: { snapshots: PortfolioSnapshot[] })
     const p = points[idx];
     return `${p.date}<br/>Ganhos acumulados: ${p.gain == null ? "—" : moneyFmt(p.gain)}`;
   };
+  const tipFor = (params: unknown) => {
+    const rows = Array.isArray(params) ? params : [params];
+    const idx = (rows[0] as { dataIndex?: number })?.dataIndex ?? 0;
+    if (isTwr) return formatTwrTip(points[idx]);
+    if (isGain) return gainTip(params);
+    if (isPct) return formatIndexedTip(points[idx], positionsPct[idx] ?? null, totalPct[idx] ?? null);
+    const p = points[idx];
+    return formatSnapshotTip(p.snap, p.positions, p.total);
+  };
   const ref = useChart(
     snapshots.length >= 2
       ? {
         textStyle: { fontFamily: FONT },
         tooltip: {
           trigger: "axis",
-          formatter: isGain
-            ? gainTip
-            : isPct
-              ? (params: unknown) => {
-                const rows = Array.isArray(params) ? params : [params];
-                const idx = (rows[0] as { dataIndex?: number })?.dataIndex ?? 0;
-                return formatIndexedTip(points[idx], positionsPct[idx] ?? null, totalPct[idx] ?? null);
-              }
-              : (params: unknown) => {
-                const rows = Array.isArray(params) ? params : [params];
-                const idx = (rows[0] as { dataIndex?: number })?.dataIndex ?? 0;
-                const p = points[idx];
-                return formatSnapshotTip(p.snap, p.positions, p.total);
-              },
+          formatter: tipFor,
         },
         legend: {
-          data: isGain ? ["Ganhos"] : isPct ? ["Carteira", "Total"] : ["Caixa", "Carteira", "Total"],
+          data: isTwr ? ["TWR"] : isGain ? ["Ganhos"] : isPct ? ["Carteira", "Total"] : ["Caixa", "Carteira", "Total"],
           textStyle: { color: SLATE },
           bottom: 0,
         },
@@ -248,13 +252,17 @@ export function SnapshotsLine({ snapshots }: { snapshots: PortfolioSnapshot[] })
         yAxis: {
           type: "value",
           splitLine: { lineStyle: { color: "#eef2f0" } },
-          axisLabel: isPct ? { color: SLATE, formatter: pctFmt } : { color: SLATE },
+          axisLabel: isPct || isTwr ? { color: SLATE, formatter: pctFmt } : { color: SLATE },
         },
-        series: isGain
+        series: isTwr
           ? [
-            { name: "Ganhos", type: "line", connectNulls: false, data: points.map((p) => p.gain), itemStyle: { color: "#7c3aed" } },
+            { name: "TWR", type: "line", connectNulls: false, data: points.map((p) => (p.twr == null ? null : p.twr * 100)), itemStyle: { color: "#0891b2" } },
           ]
-          : isPct
+          : isGain
+            ? [
+              { name: "Ganhos", type: "line", connectNulls: false, data: points.map((p) => p.gain), itemStyle: { color: "#7c3aed" } },
+            ]
+            : isPct
             ? [
               { name: "Carteira", type: "line", connectNulls: false, data: positionsPct, itemStyle: { color: "#2563eb" } },
               { name: "Total", type: "line", connectNulls: false, data: totalPct, itemStyle: { color: GREEN } },
@@ -288,12 +296,14 @@ export function SnapshotsLine({ snapshots }: { snapshots: PortfolioSnapshot[] })
         <Button size="sm" variant={mode !== "brl" ? "ghost" : undefined} onClick={() => setMode("brl")}>R$</Button>
         <Button size="sm" variant={mode !== "pct" ? "ghost" : undefined} onClick={() => setMode("pct")}>%</Button>
         <Button size="sm" variant={mode !== "gain" ? "ghost" : undefined} onClick={() => setMode("gain")}>Ganhos</Button>
+        <Button size="sm" variant={mode !== "twr" ? "ghost" : undefined} onClick={() => setMode("twr")}>TWR</Button>
       </div>
       <div ref={ref} style={{ width: "100%", height: 300 }} />
       <p><small>
         {snapshots.length} pontos em {spanDays} dias — segmentos unem eventos.
         {isPct && " Índice base 100 no primeiro ponto (Carteira e Total) — inclui aportes/resgates, não é rentabilidade pura."}
         {isGain && " Ganhos acumulados (total − aportes líquidos): o aporte em si não soma, mas o rendimento dele soma."}
+        {isTwr && " TWR acumulado: exclui aportes/resgates (métrica pura); compare com o % base 100 para ver o efeito dos aportes."}
       </small></p>
       {series.hasGaps && <p><small>Lacunas = dias sem cotação completa (posições/total indisponíveis, nunca zero).</small></p>}
     </>

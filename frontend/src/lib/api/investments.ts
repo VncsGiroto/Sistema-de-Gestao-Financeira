@@ -96,6 +96,7 @@ export interface PortfolioSnapshot {
   status: string;
   unpriced: string[];
   gain?: string | null;
+  twr?: string | null;
 }
 
 export interface Portfolio {

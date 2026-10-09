@@ -33,6 +33,25 @@ def cumulative_gains(totals: list[tuple[date, Decimal]], flows: list[tuple[date,
     return out
 
 
+def cumulative_twr(points: list[tuple[date, Decimal]], flows: list[tuple[date, Decimal]]) -> dict:
+    """TWR acumulado por data (fração), excluindo o efeito de aportes/resgates.
+
+    Puro e unit testável. Mesma convenção do TWR total: value = total antes do
+    fluxo. Primeiro ponto sempre zera; prefixo insolúvel → None.
+    """
+    out: dict = {}
+    if not points:
+        return out
+    base_date, base_value = points[0]
+    out[base_date] = Decimal("0")
+    events = [{"date": base_date, "flow": Decimal("0"), "value": Decimal(base_value)}]
+    for (prev_date, _), (d, t) in zip(points, points[1:]):
+        flow = sum((a for fd, a in flows if prev_date < fd <= d), Decimal("0"))
+        events.append({"date": d, "flow": flow, "value": Decimal(t) - flow})
+        out[d] = ret.unitize(events)
+    return out
+
+
 async def compute_portfolio(
     session: AsyncSession, user_id: int, ref: date | None = None, persist_prices: bool = False
 ) -> dict:
@@ -165,10 +184,11 @@ async def compute_portfolio(
     # Ganho acumulado por ponto: total − total do 1º ponto COMPLETE − aportes
     # líquidos após ele (aporte em si nunca soma; o rendimento dele soma).
     gain_totals: list[tuple[date, Decimal]] = []
-    for s in complete:
-        assert s.total is not None  # COMPLETE implica total presente (upsert grava juntos)
-        gain_totals.append((s.date, s.total))
+    for snap in complete:
+        assert snap.total is not None  # COMPLETE implica total presente (upsert grava juntos)
+        gain_totals.append((snap.date, snap.total))
     gain_by_date = cumulative_gains(gain_totals, ext)
+    twr_by_date = cumulative_twr(gain_totals, ext)
     twr = None
     if len(complete) >= 2:
         # COMPLETE implica total presente (upsert grava os dois juntos).
@@ -188,6 +208,7 @@ async def compute_portfolio(
             "status": s.status,
             "unpriced": list(s.unpriced or []),
             "gain": gain_by_date.get(s.date),
+            "twr": twr_by_date.get(s.date),
         }
         for s in snap_rows
     ]

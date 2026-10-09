@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatIndexedTip, formatSnapshotTip, indexBase100, toChartPoints, toChartSeries, withToday } from "./charts";
+import { formatIndexedTip, formatSnapshotTip, formatTwrTip, indexBase100, toChartPoints, toChartSeries, withToday } from "./charts";
 import type { PortfolioSnapshot } from "../../lib/api";
 
 function snap(over: Partial<PortfolioSnapshot> & { date: string }): PortfolioSnapshot {
@@ -66,6 +66,15 @@ describe("toChartPoints", () => {
     ]);
     expect(pts.map((p) => p.gain)).toEqual([0, 25.5, null]);
   });
+
+  it("repasse do TWR (null quando ausente)", () => {
+    const pts = toChartPoints([
+      snap({ date: "2026-10-06", twr: "0" }),
+      snap({ date: "2026-10-07", twr: "0.0909" }),
+      snap({ date: "2026-10-08" }),
+    ]);
+    expect(pts.map((p) => p.twr)).toEqual([0, 0.0909, null]);
+  });
 });
 
 describe("indexBase100", () => {
@@ -94,6 +103,18 @@ describe("withToday", () => {
   });
 });
 
+describe("formatTwrTip", () => {
+  it("mostra % puro com total ancorado; sem TWR mostra —", () => {
+    const pts = toChartPoints([
+      snap({ date: "2026-10-06", twr: "0", total: "1000.00" }),
+      snap({ date: "2026-10-07", twr: "0.0909", total: "1100.00" }),
+      snap({ date: "2026-10-08" }),
+    ]);
+    expect(formatTwrTip(pts[1])).toContain("9,09%");
+    expect(formatTwrTip(pts[1])).toContain("R$");
+    expect(formatTwrTip(pts[2])).toContain("TWR acumulado: —");
+  });
+});
 describe("formatIndexedTip", () => {
   it("mostra % com R$ ancorado", () => {
     const pts = toChartPoints([snap({ date: "2026-10-06" }), snap({ date: "2026-10-07" })]);

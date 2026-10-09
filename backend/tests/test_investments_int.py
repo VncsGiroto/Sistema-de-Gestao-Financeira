@@ -872,3 +872,6 @@ async def test_snapshot_gain_sem_aporte(iac):
     assert by_date["2026-01-10"]["gain"] is None  # sem preço na data: INCOMPLETE
     assert by_date["2026-02-01"]["gain"] == "0.00"  # 1º ponto COMPLETE zera
     assert by_date["2026-03-01"]["gain"] == "100.00"  # 1200 − 1100, sem fluxos
+    assert by_date["2026-01-10"]["twr"] is None
+    assert Decimal(by_date["2026-02-01"]["twr"]) == 0
+    assert abs(Decimal(by_date["2026-03-01"]["twr"]) - (Decimal("1200") / Decimal("1100") - 1)) < Decimal("0.000001")

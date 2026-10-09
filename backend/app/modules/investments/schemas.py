@@ -154,6 +154,7 @@ class PortfolioSnapshotOut(BaseModel):
     status: str = "UNKNOWN"
     unpriced: list[str] = []
     gain: Decimal | None = None  # ganho acumulado desde o 1º ponto COMPLETE (total − aportes líquidos)
+    twr: Decimal | None = None  # TWR acumulado até a data (fração; exclui aportes/resgates)
 
 
 class PortfolioOut(BaseModel):
